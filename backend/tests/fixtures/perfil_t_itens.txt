@@ -1,0 +1,29 @@
+0. Fundamentos :: Redes: TCP/IP, DNS, HTTP, TLS, proxy e VPN
+0. Fundamentos :: Windows por dentro: processos, serviços, registro, NTFS, Active Directory e logs de evento
+0. Fundamentos :: Linux por dentro: systemd, journald, permissões e ext4
+0. Fundamentos :: Programação: Go, Python, Bash e PowerShell
+0. Fundamentos :: Baixo nível: Assembly x86/x64 básico e os formatos de executável PE e ELF
+0. Fundamentos :: Nuvem e containers: IAM, logs de auditoria e Kubernetes
+0. Fundamentos :: criptografia aplicada, estatística básica e escrita técnica
+1. Barra horizontal :: OSINT: requisitos, SOCMINT, geolocalização, infraestrutura (DNS, ASN, Certificate Transparency, Shodan e Censys), OPSEC, lei e ética
+1. Barra horizontal :: Threat Intelligence: ciclo de inteligência e requisitos prioritários (PIRs), Kill Chain, Diamond Model, ATT&CK, STIX/TAXII, MISP e OpenCTI, ACH, linguagem estimativa e limites da atribuição
+1. Barra horizontal :: Malware: triagem estática e dinâmica, sandbox, YARA e Sigma, Ghidra básico, scripts maliciosos (PowerShell, VBA, JavaScript) e desempacotamento simples
+1. Barra horizontal :: Dark web: Tor e I2P, economia do cibercrime (ransomware como serviço, infostealers, vendedores de acesso inicial), monitoramento por fontes secundárias e limites legais
+2. DFIR :: Processo e jurídico: ciclo de resposta do NIST SP 800-61, cadeia de custódia (arts. 158-A a 158-F do CPP), ISO/IEC 27037, comunicação de incidente à ANPD pela LGPD, laudo e relatório
+2. DFIR :: Aquisição: imagem de disco (E01, bloqueador de escrita), memória (WinPmem, AVML), triagem ao vivo (KAPE, Velociraptor) e coleta em nuvem
+2. DFIR :: Sistemas de arquivos: NTFS ($MFT, $UsnJrnl, $LogFile, fluxos alternativos), ext4, timestamps MACB, carving, Sleuth Kit e Autopsy
+2. DFIR :: Artefatos Windows, registro: ShellBags, UserAssist, ShimCache, AmCache, BAM
+2. DFIR :: Artefatos Windows, execução e uso: Prefetch, SRUM, LNK e Jump Lists
+2. DFIR :: Artefatos Windows, logs: eventos 4624, 4688 e 7045, Sysmon, PowerShell
+2. DFIR :: Artefatos Windows, outros: navegadores, tarefas agendadas e serviços
+2. DFIR :: Artefatos Linux e macOS: auth.log e journal, histórico de shell, cron, units do systemd, auditd e unified logs do macOS
+2. DFIR :: Memória: Volatility 3, MemProcFS, injeção de processo e credenciais em memória
+2. DFIR :: Rede: pcap, Zeek, Suricata, NetFlow, fingerprints JA3 e JA4, logs de DNS e proxy
+2. DFIR :: Linha do tempo: super-timeline com plaso e Timesketch
+2. DFIR :: Resposta em escala corporativa, ferramentas: EDR e SIEM (Sigma, KQL, SPL)
+2. DFIR :: Resposta em escala corporativa: threat hunting guiado por hipótese
+2. DFIR :: Resposta em escala corporativa: rastros de ataques ao Active Directory: Kerberoasting, pass-the-hash, DCSync
+2. DFIR :: Resposta em escala corporativa: movimento lateral e playbook de ransomware
+2. DFIR :: Nuvem e containers: CloudTrail, VPC Flow Logs, logs do Entra ID e do M365, audit log do Kubernetes e forense de container
+2. DFIR :: Antiforense: alteração de timestamps, limpeza de logs, wiping e como detectar cada um
+2. DFIR :: Opcional: forense mobile (Android e iOS), incluindo o MVT para spyware

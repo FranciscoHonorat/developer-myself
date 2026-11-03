@@ -1,0 +1,246 @@
+Computação e sistemas operacionais [Profundo] :: Processos, threads, escalonamento, troca de contexto
+Computação e sistemas operacionais [Profundo] :: Memória: pilha, heap, memória virtual, paginação, coleta de lixo
+Computação e sistemas operacionais [Profundo] :: Sistema de arquivos, inodes, descritores de arquivo, chamadas de sistema (syscalls)
+Computação e sistemas operacionais [Profundo] :: Concorrência: condição de corrida, deadlock, mutex, semáforo, canais
+Computação e sistemas operacionais [Profundo] :: Estruturas de dados, algoritmos e complexidade (Big O)
+Linux [Profundo] :: Shell e Bash: pipes, redirecionamento, variáveis, scripts, códigos de saída
+Linux [Profundo] :: Usuários, grupos, permissões, sudo, umask, ACL, setuid
+Linux [Profundo] :: Processos e serviços: ps, top, sinais, kill, systemd, journald, cron
+Linux [Profundo] :: Pacotes (apt, dnf), disco (df, du, lsblk, mount), LVM, logs em /var/log
+Linux [Profundo] :: Rede no terminal: ip, ss, dig, curl, nc, tcpdump, nftables ou iptables
+Linux [Profundo] :: SSH: chaves, arquivo de config, túneis, hardening básico
+Linux [Profundo] :: Texto: grep, sed, awk, jq, find, xargs
+Redes [Profundo] :: Modelos OSI e TCP/IP, encapsulamento
+Redes [Profundo] :: IP, sub-redes, CIDR, roteamento, NAT, IPv6
+Redes [Profundo] :: TCP (handshake, janelas, retransmissão) e UDP
+Redes [Profundo] :: DNS: tipos de registro, resolução, TTL, cache
+Redes [Profundo] :: HTTP/1.1, HTTP/2, HTTP/3 (QUIC): métodos, cabeçalhos, cookies, cache HTTP
+Redes [Profundo] :: TLS: handshake, certificados, cadeia de confiança, SNI
+Redes [Profundo] :: Proxy, proxy reverso, balanceador L4 e L7, firewall, VPN, VLAN
+Git e colaboração [Profundo] :: Commit, branch, merge, rebase, cherry-pick, reflog, bisect
+Git e colaboração [Profundo] :: Fluxos: trunk-based, GitHub Flow, GitFlow
+Git e colaboração [Profundo] :: Pull request, code review, Conventional Commits, versionamento semântico (SemVer)
+Git e colaboração [Profundo] :: Hooks, commits assinados (GPG ou SSH), Git LFS [Noção]
+Linguagens :: Go [Profundo]: tipos, interfaces, erros, generics, goroutines, canais, context, testes, benchmarks, profiling
+Linguagens :: Bash [Funcional]: automação e scripts de pipeline
+Linguagens :: TypeScript e JavaScript [Funcional]: navegador e Node.js
+Linguagens :: Python [Funcional]: automação e integrações
+Linguagens :: SQL [Funcional]
+Linguagens :: YAML, JSON e HCL [Funcional]: as linguagens de configuração do mundo DevOps
+Engenharia de software [Funcional] :: Testes: unitário, integração, ponta a ponta, contrato, carga; TDD; mocks, stubs e fakes
+Engenharia de software [Funcional] :: Design: SOLID, coesão e acoplamento, padrões de projeto, refatoração
+Engenharia de software [Funcional] :: Arquitetura: camadas, hexagonal, monolito modular, microsserviços, orientada a eventos
+Engenharia de software [Funcional] :: Documentação: README, ADR (registro de decisão de arquitetura), RFC, modelo C4
+Engenharia de software [Funcional] :: Métodos ágeis: Scrum, Kanban, estimativa, débito técnico
+Bancos de dados [Funcional] :: Modelagem relacional, normalização, chaves, índices, plano de execução
+Bancos de dados [Funcional] :: Transações, ACID, níveis de isolamento, locks
+Bancos de dados [Funcional] :: NoSQL: chave-valor (Redis), documento (MongoDB), colunar e grafo [Noção]
+Bancos de dados [Funcional] :: Migrations, backup, replicação, pool de conexões
+Sistemas distribuídos [Funcional] :: Teorema CAP e PACELC, modelos de consistência
+Sistemas distribuídos [Funcional] :: Replicação, particionamento (sharding), consenso com Raft [Noção]
+Sistemas distribuídos [Funcional] :: Filas, idempotência, retry com backoff, timeout, circuit breaker
+Sistemas distribuídos [Funcional] :: Relógios e ordenação de eventos, entrega at-least-once e exactly-once
+Frontend [Funcional] :: HTML semântico, formulários, acessibilidade (WCAG, ARIA)
+Frontend [Funcional] :: CSS: box model, flexbox, grid, responsividade, design system
+Frontend [Funcional] :: JavaScript: escopo, closures, promises, async/await, event loop, módulos
+Frontend [Funcional] :: DOM, eventos, Fetch API, armazenamento do navegador (cookies, localStorage, sessionStorage)
+Frontend [Funcional] :: TypeScript: tipos, generics, tipagem de respostas de API
+Frontend [Funcional] :: Um framework a fundo (React ou Vue): componentes, estado, efeitos, rotas, formulários
+Frontend [Funcional] :: Renderização: CSR, SSR, SSG, hidratação (Next.js ou Nuxt)
+Frontend [Funcional] :: Build: Vite, bundling, tree shaking, variáveis de ambiente
+Frontend [Funcional] :: Performance web: Core Web Vitals, lazy loading, cache, CDN
+Frontend [Funcional] :: Testes: Vitest ou Jest, Testing Library, Playwright
+Frontend [Funcional] :: Segurança no navegador: política de mesma origem, CORS, CSP, XSS, onde guardar tokens
+Backend e APIs [Profundo] :: HTTP a fundo: métodos, status codes, idempotência, cabeçalhos, negociação de conteúdo
+Backend e APIs [Profundo] :: Design de APIs REST: recursos, versionamento, paginação, filtros, padrão de erro (Problem Details, RFC 9457)
+Backend e APIs [Profundo] :: Contratos: OpenAPI, JSON Schema gRPC e Protocol Buffers, WebSockets e SSE, GraphQL [Noção]
+Backend e APIs [Profundo] :: Autenticação: sessão com cookie, JWT, OAuth 2.0, OpenID Connect
+Backend e APIs [Profundo] :: Autorização: RBAC, ABAC, ReBAC, política centralizada
+Backend e APIs [Profundo] :: Validação de entrada, tratamento de erros, logs estruturados
+Backend e APIs [Profundo] :: Cache: HTTP, Redis, invalidação
+Backend e APIs [Profundo] :: Mensageria: RabbitMQ, Kafka, NATS; jobs em segundo plano e filas de retry
+Backend e APIs [Profundo] :: Rate limiting, paginação por cursor, upload e streaming de arquivos
+Backend e APIs [Profundo] :: Performance: profiling (pprof), pool de conexões, testes de carga (k6)
+Backend e APIs [Profundo] :: Frameworks: net/http com chi ou Gin (Go), NestJS ou Express (Node)
+Dados na aplicação [Funcional] :: SQL direto vs ORM ou geradores (sqlc, GORM, Prisma, TypeORM)
+Dados na aplicação [Funcional] :: Migrations sem downtime (expandir e contrair), seeds
+Dados na aplicação [Funcional] :: Transações na aplicação, consultas N+1, paginação eficiente
+Mobile [Noção] :: Flutter, offline-first, sincronização, publicação nas lojas
+Mobile [Noção] :: Segurança mobile com OWASP MASVS
+Integração de IA [Noção] :: Consumir APIs de LLM, prompts, embeddings, RAG
+Integração de IA [Noção] :: Agentes e chamadas de ferramentas
+Integração de IA [Noção] :: Custo, latência e avaliação de respostas
+Fundamentos de segurança [Profundo] :: Tríade CIA (confidencialidade, integridade, disponibilidade), autenticidade, não repúdio
+Fundamentos de segurança [Profundo] :: Menor privilégio, defesa em profundidade, seguro por padrão, falhar de forma segura
+Fundamentos de segurança [Profundo] :: Zero Trust, superfície de ataque, fronteira de confiança, risco (probabilidade x impacto)
+Fundamentos de segurança [Profundo] :: Taxonomias: CWE, CVE, CVSS, EPSS, catálogo KEV da CISA
+Criptografia aplicada [Funcional] :: Hash (SHA-256), HMAC, assinatura digital
+Criptografia aplicada [Funcional] :: Senhas: Argon2id, bcrypt, scrypt, salt
+Criptografia aplicada [Funcional] :: Simétrica (AES-GCM, ChaCha20-Poly1305) e assimétrica (RSA, curvas elípticas,
+Criptografia aplicada [Funcional] :: Ed25519)
+Criptografia aplicada [Funcional] :: Troca de chaves (Diffie-Hellman), KDF, aleatoriedade segura (crypto/rand)
+Criptografia aplicada [Funcional] :: PKI, certificados X.509, TLS 1.3, mTLS, revogação
+Criptografia aplicada [Funcional] :: Gestão de chaves: KMS, HSM [Noção], rotação, envelope encryption
+Criptografia aplicada [Funcional] :: Criptografia pós-quântica [Noção]: plano de migração
+Criptografia aplicada [Funcional] :: Erros clássicos: algoritmo caseiro, modo ECB, nonce reutilizado, chave no código
+Vulnerabilidades web [Profundo] :: OWASP Top 10:2025, a lista atual:
+Vulnerabilidades web [Profundo] :: A01 Broken Access Control: quebra de controle de acesso (SSRF agora faz parte desta categoria)
+Vulnerabilidades web [Profundo] :: A02 Security Misconfiguration: configuração incorreta
+Vulnerabilidades web [Profundo] :: A03 Software Supply Chain Failures: falhas na cadeia de suprimentos (nova)
+Vulnerabilidades web [Profundo] :: A04 Cryptographic Failures: falhas criptográficas
+Vulnerabilidades web [Profundo] :: A05 Injection: injeção, incluindo XSS e SQL injection
+Vulnerabilidades web [Profundo] :: A06 Insecure Design: design inseguro
+Vulnerabilidades web [Profundo] :: A07 Authentication Failures: falhas de autenticação
+Vulnerabilidades web [Profundo] :: A08 Software or Data Integrity Failures: falhas de integridade de software ou dados
+Vulnerabilidades web [Profundo] :: A09 Security Logging and Alerting Failures: falhas de log e alerta
+Vulnerabilidades web [Profundo] :: A10 Mishandling of Exceptional Conditions: tratamento incorreto de condições excepcionais (nova)
+Vulnerabilidades web [Profundo] :: Injeções: SQL, NoSQL, comando do sistema, template (SSTI), LDAP, log
+Vulnerabilidades web [Profundo] :: XSS refletido, armazenado e baseado em DOM
+Vulnerabilidades web [Profundo] :: CSRF, SSRF, XXE, desserialização insegura
+Vulnerabilidades web [Profundo] :: Path traversal, upload de arquivos, open redirect, clickjacking
+Vulnerabilidades web [Profundo] :: IDOR, mass assignment, CORS mal configurado
+Vulnerabilidades web [Profundo] :: Race conditions e falhas de lógica de negócio
+Vulnerabilidades web [Profundo] :: Avançado [Noção]: HTTP request smuggling, cache poisoning, prototype pollution
+Segurança de APIs [Profundo] :: OWASP API Security Top 10 (2023): BOLA, autenticação quebrada, autorização por propriedade (BOPLA), consumo irrestrito de recursos, autorização por função (BFLA), acesso irrestrito a fluxos de negócio sensíveis, SSRF, configuração incorreta, inventário inadequado, consumo inseguro de APIs de terceiros
+Segurança de APIs [Profundo] :: Validação por schema, rate limiting, cotas, paginação segura
+Segurança de APIs [Profundo] :: API gateway, chaves de API, escopo de tokens
+Identidade e acesso [Profundo] :: Senhas, MFA, TOTP, WebAuthn e passkeys
+Identidade e acesso [Profundo] :: Sessão: cookies HttpOnly, Secure e SameSite, expiração, rotação de ID
+Identidade e acesso [Profundo] :: JWT: assinatura, ataque alg none, chave fraca, expiração, revogação, onde armazenar
+Identidade e acesso [Profundo] :: OAuth 2.0: authorization code com PKCE, client credentials, escopos, erros comuns
+Identidade e acesso [Profundo] :: OpenID Connect, SSO, SAML [Noção]
+Identidade e acesso [Profundo] :: IAM: ciclo de vida de contas, contas de serviço, segregação de funções
+Identidade e acesso [Profundo] :: Provedores: Keycloak, Auth0, Cognito [Noção]
+Ciclo de desenvolvimento seguro (SSDLC) [Profundo] :: Requisitos de segurança com o OWASP ASVS 5.0 e seus níveis de verificação
+Ciclo de desenvolvimento seguro (SSDLC) [Profundo] :: Modelagem de ameaças: diagrama de fluxo de dados, fronteiras de confiança, STRIDE, árvores de ataque, OWASP Threat Dragon
+Ciclo de desenvolvimento seguro (SSDLC) [Profundo] :: Code review de segurança e checklists por linguagem
+Ciclo de desenvolvimento seguro (SSDLC) [Profundo] :: Go seguro: html/template, consultas parametrizadas, crypto/rand, timeouts no http.Server, gosec, govulncheck
+Ciclo de desenvolvimento seguro (SSDLC) [Profundo] :: Maturidade do programa: OWASP SAMM, security champions
+Testes de segurança [Profundo] :: SAST (análise estática): Semgrep, CodeQL, gosec
+Testes de segurança [Profundo] :: SCA (dependências): govulncheck, Trivy, Grype, OSV-Scanner, Dependabot
+Testes de segurança [Profundo] :: Segredos vazados: Gitleaks, TruffleHog
+Testes de segurança [Profundo] :: DAST (aplicação rodando): OWASP ZAP, Burp Suite
+Testes de segurança [Profundo] :: Fuzzing com go test -fuzz; IAST e RASP [Noção]
+Testes de segurança [Profundo] :: Pentest web: reconhecimento, interceptação de requisições, exploração, relatório
+Testes de segurança [Profundo] :: Triagem: falso positivo, priorização por CVSS, EPSS e exposição real
+Cadeia de suprimentos de software [Profundo] :: SBOM nos formatos SPDX e CycloneDX
+Cadeia de suprimentos de software [Profundo] :: Assinatura e verificação de artefatos com Sigstore (cosign)
+Cadeia de suprimentos de software [Profundo] :: Proveniência e níveis SLSA, OpenSSF Scorecard
+Cadeia de suprimentos de software [Profundo] :: Versões fixadas, lockfiles, checksums (go.sum), proxy de módulos
+Cadeia de suprimentos de software [Profundo] :: Ataques: typosquatting, dependency confusion, mantenedor comprometido
+Privacidade e conformidade [Funcional] :: LGPD: dado pessoal, dado sensível, bases legais, direitos do titular, comunicação de incidentes
+Privacidade e conformidade [Funcional] :: Privacy by design, minimização, anonimização e pseudonimização, retenção
+Privacidade e conformidade [Funcional] :: Normas [Noção]: ISO/IEC 27001, PCI DSS, SOC 2
+Segurança de IA [Noção] :: OWASP Top 10 para aplicações LLM: injeção de prompt, vazamento de dados sensíveis, cadeia de suprimentos
+Segurança de IA [Noção] :: Controles: separar dados de instruções, menor privilégio para agentes, validar saídas
+Gestão de vulnerabilidades [Funcional] :: Inventário, priorização, prazo de correção por severidade, gestão de patches
+Gestão de vulnerabilidades [Funcional] :: Divulgação responsável, security.txt, bug bounty
+Gestão de vulnerabilidades [Funcional] :: Resposta a incidentes de segurança na aplicação
+Cultura, métricas e SRE [Profundo] :: CALMS (cultura, automação, lean, medição, compartilhamento) e The Three Ways
+Cultura, métricas e SRE [Profundo] :: Métricas DORA, na versão do relatório 2025:
+Cultura, métricas e SRE [Profundo] :: Vazão: lead time de mudanças, frequência de deploy, tempo de recuperação de deploy com falha
+Cultura, métricas e SRE [Profundo] :: Instabilidade: taxa de falha de mudanças, taxa de retrabalho (nova)
+Cultura, métricas e SRE [Profundo] :: SRE: SLI, SLO, SLA, error budget, toil
+Cultura, métricas e SRE [Profundo] :: Gestão de incidentes, plantão (on-call), postmortem sem culpados, runbooks
+Cultura, métricas e SRE [Profundo] :: Team Topologies e platform engineering [Noção]
+Containers [Profundo] :: Por baixo do capô: namespaces, cgroups, union filesystem, padrão OCI
+Containers [Profundo] :: Docker: Dockerfile, camadas, cache, multi-stage, BuildKit, volumes, redes
+Containers [Profundo] :: Imagens mínimas: scratch e distroless para Go, Alpine e seus trade-offs
+Containers [Profundo] :: Registries, tag vs digest, Docker Compose
+Containers [Profundo] :: Alternativas: Podman, containerd [Noção]
+Kubernetes [Profundo] :: Arquitetura: API server, etcd, scheduler, controller manager, kubelet, kube-proxy
+Kubernetes [Profundo] :: Workloads: Pod, Deployment, ReplicaSet, StatefulSet, DaemonSet, Job, CronJob
+Kubernetes [Profundo] :: Rede: Service, Ingress, Gateway API, DNS interno, CNI
+Kubernetes [Profundo] :: Configuração e dados: ConfigMap, Secret, volumes, PV, PVC, StorageClass
+Kubernetes [Profundo] :: Saúde e recursos: probes, requests e limits, classes de QoS, HPA, VPA,
+Kubernetes [Profundo] :: PodDisruptionBudget
+Kubernetes [Profundo] :: Acesso: namespaces, RBAC, ServiceAccounts
+Kubernetes [Profundo] :: Empacotamento: Helm, Kustomize
+Kubernetes [Profundo] :: Extensão: CRDs, operators, controllers
+Kubernetes [Profundo] :: Operação: kubectl, depuração, upgrade de cluster, clusters locais (kind, k3d, minikube)
+Kubernetes [Profundo] :: Serviços gerenciados: EKS, GKE, AKS
+CI/CD [Profundo] :: Integração contínua: build, testes, lint, artefatos, cache, matriz de versões
+CI/CD [Profundo] :: Ferramentas: GitHub Actions, GitLab CI, Jenkins [Noção]
+CI/CD [Profundo] :: Entrega e implantação contínua, ambientes, promoção entre ambientes
+CI/CD [Profundo] :: Estratégias de deploy: rolling, blue-green, canary, feature flags, rollback
+CI/CD [Profundo] :: GitOps: Argo CD, Flux
+CI/CD [Profundo] :: Releases: SemVer, changelog, tags
+CI/CD [Profundo] :: Monorepo vs multirepo, builds reproduzíveis
+Infraestrutura como código [Profundo] :: Terraform ou OpenTofu: providers, resources, data sources, variáveis, outputs
+Infraestrutura como código [Profundo] :: State: remoto, locking, import, drift, refatoração com blocos moved
+Infraestrutura como código [Profundo] :: Módulos, workspaces, separação por ambiente, plan e apply no pipeline
+Infraestrutura como código [Profundo] :: Configuração de servidores: Ansible (inventário, playbooks, roles, idempotência)
+Infraestrutura como código [Profundo] :: Imagens de máquina: Packer [Noção]
+Infraestrutura como código [Profundo] :: Alternativas: Pulumi, CloudFormation, Crossplane [Noção]
+Infraestrutura como código [Profundo] :: Testes de IaC: terraform validate, tflint, Terratest
+Cloud [Profundo em um provedor] :: Modelo de responsabilidade compartilhada, regiões e zonas de disponibilidade
+Cloud [Profundo em um provedor] :: IAM: usuários, papéis, políticas, federação
+Cloud [Profundo em um provedor] :: Rede: VPC, sub-redes públicas e privadas, tabelas de rota, security groups, NACL, NAT, peering
+Cloud [Profundo em um provedor] :: Computação: VMs (EC2), auto scaling, containers gerenciados (ECS, EKS), serverless (Lambda)
+Cloud [Profundo em um provedor] :: Armazenamento e dados: objetos (S3), discos, bancos gerenciados (RDS), filas (SQS,
+Cloud [Profundo em um provedor] :: SNS)
+Cloud [Profundo em um provedor] :: Entrega: DNS (Route 53), CDN (CloudFront), balanceadores (ALB, NLB)
+Cloud [Profundo em um provedor] :: Monitoramento e auditoria: CloudWatch, CloudTrail
+Cloud [Profundo em um provedor] :: Custos e FinOps: tags, orçamentos, dimensionamento correto
+Cloud [Profundo em um provedor] :: Well-Architected Framework
+Cloud [Profundo em um provedor] :: Outros provedores [Noção]: Azure, GCP, OCI
+Observabilidade [Profundo] :: Sinais: logs estruturados, métricas, traces distribuídos, profiling contínuo
+Observabilidade [Profundo] :: Métodos: RED, USE, quatro sinais de ouro
+Observabilidade [Profundo] :: OpenTelemetry: SDK, coletor, propagação de contexto
+Observabilidade [Profundo] :: Prometheus e PromQL, Grafana, Loki, Tempo ou Jaeger
+Observabilidade [Profundo] :: Alertas por sintoma, fadiga de alertas, dashboards que respondem perguntas
+Observabilidade [Profundo] :: Cardinalidade, amostragem, custo de telemetria
+Tráfego em produção [Funcional] :: Proxy reverso: Nginx, Traefik, Envoy
+Tráfego em produção [Funcional] :: Balanceamento L4 e L7, health checks, sessões fixas
+Tráfego em produção [Funcional] :: Certificados automáticos: Let's Encrypt, cert-manager
+Tráfego em produção [Funcional] :: CDN, WAF, proteção contra DDoS
+Tráfego em produção [Funcional] :: Service mesh: Istio, Linkerd [Noção]
+Confiabilidade e operação [Funcional] :: Alta disponibilidade, redundância, failover
+Confiabilidade e operação [Funcional] :: Backup e recuperação de desastres: RPO, RTO, testes de restauração
+Confiabilidade e operação [Funcional] :: Testes de carga (k6) e planejamento de capacidade
+Confiabilidade e operação [Funcional] :: Engenharia do caos [Noção]
+Software sustentável [Noção] :: Eficiência energética do código e da infraestrutura, pegada de carbono na nuvem
+Software sustentável [Noção] :: Desligar ambientes ociosos, dimensionar corretamente, escolher região
+Segurança no pipeline :: Shift left (no código e no pull request) e shift right (em produção)
+Segurança no pipeline :: Hooks de pre-commit: lint, segredos, formatação
+Segurança no pipeline :: Estágios: SAST, SCA, varredura de segredos, varredura de IaC, varredura de imagem,
+Segurança no pipeline :: DAST em staging
+Segurança no pipeline :: Gates de qualidade: quebrar o build por severidade, exceções com prazo e dono
+Segurança no pipeline :: Varredura de IaC: Checkov, Trivy, KICS
+Segurança no pipeline :: Gestão de achados: formato SARIF, deduplicação, DefectDojo
+Segurança do próprio CI/CD :: OWASP Top 10 de riscos de segurança em CI/CD
+Segurança do próprio CI/CD :: Permissões mínimas do token do pipeline, proteção de branch, revisão obrigatória
+Segurança do próprio CI/CD :: Actions fixadas por SHA, runners isolados ou efêmeros
+Segurança do próprio CI/CD :: OIDC do CI para a cloud, sem chaves de longa duração
+Segurança do próprio CI/CD :: Cuidado com PRs de forks e gatilhos privilegiados, segredos por ambiente
+Segurança de containers :: Usuário não root, sistema de arquivos somente leitura, capabilities removidas seccomp, AppArmor ou SELinux
+Segurança de containers :: Varredura de imagem (Trivy, Grype) e atualização da imagem base
+Segurança de containers :: Assinar imagens com cosign e verificar antes do deploy
+Segurança de containers :: Detecção em tempo de execução com Falco
+Segurança de containers :: CIS Docker Benchmark
+Segurança de Kubernetes :: RBAC mínimo, ServiceAccounts sem montagem automática de token
+Segurança de Kubernetes :: Pod Security Standards: privileged, baseline, restricted
+Segurança de Kubernetes :: NetworkPolicies com negação por padrão
+Segurança de Kubernetes :: Controladores de admissão e políticas: Kyverno, OPA Gatekeeper
+Segurança de Kubernetes :: Segredos: Sealed Secrets, External Secrets Operator, criptografia do etcd
+Segurança de Kubernetes :: Auditoria: CIS Kubernetes Benchmark, kube-bench, logs de auditoria da API
+Segurança na cloud :: IAM com menor privilégio, conta root só para emergência, MFA
+Segurança na cloud :: Criptografia em repouso e em trânsito com KMS
+Segurança na cloud :: Rede: sub-redes privadas, acesso por gerenciador de sessão em vez de SSH aberto, endpoints privados
+Segurança na cloud :: Detecção: CloudTrail, GuardDuty, CSPM [Noção]
+Segurança na cloud :: Guardrails de organização: políticas de controle de serviço (SCPs), tags obrigatórias
+Gestão de segredos :: HashiCorp Vault ou OpenBao, AWS Secrets Manager, SOPS
+Gestão de segredos :: Segredos dinâmicos, rotação automática, tempo de vida curto
+Gestão de segredos :: Nunca em repositório, imagem, log ou variável exposta
+Políticas como código e conformidade :: OPA e Rego, Conftest, Kyverno
+Políticas como código e conformidade :: Compliance as code, evidências automáticas para auditoria mTLS entre serviços, com ou sem service mesh
+Identidade de workloads e Zero Trust :: SPIFFE e SPIRE [Noção]
+Detecção e resposta :: Logs de auditoria e de segurança centralizados, SIEM [Noção]
+Detecção e resposta :: Alertas de segurança, playbooks de incidente, forense básica em containers
+Frameworks de referência :: NIST SSDF (SP 800-218), OWASP DSOMM, SLSA, OWASP SAMM, CIS Controls
+6. Competências transversais :: Comunicação tradutora: explicar um risco técnico pelo impacto no negócio; discordar de uma decisão com dados
+6. Competências transversais :: Negociação: prazo vs segurança, débito técnico, custo de infraestrutura
+6. Competências transversais :: Escrita assíncrona: ADRs, runbooks, relatórios de vulnerabilidade que o time consegue agir sem reunião
+6. Competências transversais :: Postmortem sem culpados e segurança psicológica
+6. Competências transversais :: Modelagem de ameaças como conversa em grupo, não como documento solitário
+6. Competências transversais :: Ética: efeitos de 2ª e 3ª ordem de coleta de dados, vigilância e automação; coragem para alertar quando algo viola privacidade

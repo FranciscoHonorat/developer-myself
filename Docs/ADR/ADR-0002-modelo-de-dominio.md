@@ -51,9 +51,10 @@ StudyPlan (raiz)
 **Máquina de estados do `Content`:**
 
 ```
-LOCKED ──unlock──▶ IN_PROGRESS ──(nível ≥ Intermediário)──▶ CONSOLIDATED ──finish──▶ FINISHED
-                        └───────────────────finish──────────────────────────────────────▲
+LOCKED ──unlock──▶ IN_PROGRESS ──(nível ≥ Intermediário)──▶ CONSOLIDATED ──finish (nível = Avançado)──▶ FINISHED
 ```
+
+`finish` só é aceito no **nível máximo** da `MasteryPolicy` (hoje, Avançado). Antes disso o comando é recusado com `MasteryNotReachedError`. Na prática o caminho é sempre `IN_PROGRESS → CONSOLIDATED → FINISHED`, porque Intermediário consolida o conteúdo antes de chegar a Avançado.
 
 **O tipo da sessão é derivado, não vem do usuário.** Se o conteúdo está `IN_PROGRESS`, é ESTUDO. Se está `CONSOLIDATED` ou `FINISHED`, é REVISÃO. Se está `LOCKED`, a sessão é rejeitada. Cada dado a menos vindo do cliente é uma superfície de trapaça a menos (veja o [ADR-0009](ADR-0009-appsec.md)).
 
@@ -61,14 +62,15 @@ LOCKED ──unlock──▶ IN_PROGRESS ──(nível ≥ Intermediário)──
 
 | # | Invariante |
 |---|---|
-| I1 | No máximo **1** conteúdo `IN_PROGRESS` |
+| I1 | No máximo **3** conteúdos `IN_PROGRESS` (configurável), **cada um de uma competência principal diferente**. Era 1 até 2026-11-02 |
 | I2 | No máximo **1** sessão ativa por aprendiz |
 | I3 | Não é possível iniciar uma sessão em conteúdo `LOCKED` |
 | I4 | Pontos só mudam via `finish_session`, nunca por atribuição direta |
-| I5 | O desbloqueio segue a ordem de chegada (FIFO, primeiro a entrar, primeiro a sair) |
+| I5 | Quando abre uma vaga, entra o conteúdo da fila (entre os próximos 5 elegíveis) que **mais se interliga** com os que já estão em andamento, segundo a afinidade entre competências. Cada posição a mais na fila custa 0,25 de afinidade, então a ordem de chegada continua pesando e desempata. A ordem pode ser ajustada com `reorder_queue` |
 | I6 | `started_at` e `finished_at` vêm do **relógio do servidor**; o domínio recebe `now` como parâmetro |
 | I7 | Uma sessão aberta há **> 4 h** é abandonada e **nunca** pontua. A verificação é *lazy*: o próximo comando (`start` ou `finish`) detecta e emite `StudySessionAbandoned`, então não precisa de scheduler |
 | I8 | O nível só sobe com **pontos e desafios juntos**; o desafio só é resolvido com evidência |
+| I9 | Um conteúdo só é concluído (`FINISHED`) no **nível máximo** (Avançado) |
 
 ### Políticas (Strategy, para atender ao princípio aberto/fechado do SOLID)
 
@@ -186,6 +188,9 @@ A opção B só faria sentido com milhares de conteúdos por usuário, o que nã
 2. Anotações estruturadas (estudei / entendi / preciso revisar), ≥ 50 caracteres sem contar espaços.
 3. Níveis: pontos (10/30) **e** 3 desafios resolvidos por nível; o próximo conteúdo é desbloqueado no Intermediário.
 4. Uma sessão aberta há > 4 h, não fechada ou sem anotações, não pontua.
+7. (2026-11-02) Um conteúdo consolidado **hoje** só passa a exigir revisão (regra 2) a partir de **amanhã**. Sem isso, chegar a Intermediário no meio do dia derrubava a pontuação dos outros estudos do dia (bug encontrado pela simulação da semana). O `Content` registra `consolidated_at`; consolidações antigas, sem essa data, seguem exigindo revisão.
+6. (2026-11-02) Até 3 conteúdos em paralelo, de competências diferentes e que se interligam (pedido do aprendiz). O domínio recebe a competência e a afinidade por uma `UnlockPolicy` injetada (Protocol), para não depender do catálogo. O padrão do próprio domínio continua sendo 1 por vez.
+5. (2026-11-01) Concluir exige o **nível máximo** (Avançado). Antes, `finish` era aceito em qualquer conteúdo em andamento, o que permitia "concluir sem concluir nada" (bug encontrado no uso).
 
 ## Em aberto
 

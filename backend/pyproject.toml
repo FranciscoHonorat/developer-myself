@@ -1,0 +1,76 @@
+[project]
+name = "developer-myself"
+version = "0.1.0"
+description = "Trilha de estudo gamificada: repetição espaçada, desafios e níveis de domínio."
+requires-python = ">=3.15,<3.16"
+dependencies = [
+    "fastapi>=0.120",
+    "uvicorn[standard]>=0.38",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.11",
+    "pymongo>=4.15",
+    "aio-pika>=9.5",
+    "argon2-cffi>=25.1",
+    "structlog>=25.4",
+]
+
+[tool.poetry]
+packages = [{ include = "developer_myself", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.4"
+pytest-asyncio = ">=1.2"
+pytest-bdd = ">=8.1"
+pytest-cov = ">=7.0"
+httpx = ">=0.28"
+testcontainers = { version = ">=4.13", extras = ["mongodb", "rabbitmq"] }
+ruff = ">=0.14"
+mypy = ">=1.18"
+pip-audit = ">=2.9"
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+target-version = "py315"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "N", "SIM", "RUF", "PL", "ARG", "PT", "TID", "ASYNC"]
+# INP001 fica de fora de propósito (namespace packages, ADR-0003)
+ignore = ["PLR0913"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004", "S106", "S105"]
+# `random` com seed = treino reprodutível de ML, não criptografia.
+"src/developer_myself/insights/adapters/neural/**" = ["S311"]
+# Dados: tópicos copiados literalmente do "Mapa de conteúdos" (testado em test_map_coverage).
+"src/developer_myself/curriculum/domain/catalog.py" = ["E501"]
+
+[tool.mypy]
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["pytest_bdd.*", "testcontainers.*", "aio_pika.*", "aiormq.*", "docker.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib --strict-markers -ra"
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["integration: precisa de Docker (Testcontainers)"]
+bdd_features_base_dir = "tests/features"
+
+[tool.coverage.run]
+branch = true
+source = ["developer_myself"]

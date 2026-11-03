@@ -1,0 +1,63 @@
+# `make up` → http://localhost:8000
+# Portas expostas só em 127.0.0.1: uso pessoal/local.
+name: developer-myself
+
+x-app: &app
+  build: .
+  env_file: [.env]
+  environment:
+    DM_STORAGE: mongo
+    DM_MONGO_URL: mongodb://mongo:27017/?replicaSet=rs0
+    DM_RABBIT_URL: amqp://${RABBITMQ_USER:-dm}:${RABBITMQ_PASSWORD:?defina no .env}@rabbitmq:5672/
+  depends_on:
+    mongo: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  api:
+    <<: *app
+    ports: ["127.0.0.1:8000:8000"]
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "developer_myself.worker"]
+    healthcheck: { disable: true }
+
+  mongo:
+    # 8.2+: o 8.0 não sobe em kernel Linux >= 6.19 (SERVER-121912).
+    image: mongo:8.2@sha256:e0ce8c35124d4a9f9785532d1f268f39e9728ffa1cb38f46fa482436424c4bd3
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports: ["127.0.0.1:27017:27017"]
+    volumes: [mongo-data:/data/db]
+    healthcheck:
+      # Inicia o replica set de 1 nó na primeira vez (habilita w:majority e change streams).
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}).ok }"
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-management@sha256:af6f50d38098d8bd52fef7f3fa85015dd8b2bf6def58e995bf584ae9ba0f6407
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-dm}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?defina no .env}
+    ports: ["127.0.0.1:15672:15672"]
+    volumes: [rabbit-data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  rabbit-data:

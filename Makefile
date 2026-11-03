@@ -1,0 +1,94 @@
+# Única interface de comandos: pessoas, pre-commit e CI chamam os mesmos alvos (ADR-0007).
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
+
+# Usa as versões do .tool-versions via mise, se ele estiver instalado.
+RUN := $(if $(shell command -v mise 2>/dev/null),mise exec --,)
+PY  := cd backend && $(RUN) poetry run
+WEB := cd frontend && $(RUN)
+
+.PHONY: help install fmt lint typecheck test test-unit test-bdd test-http test-arch test-int \
+        test-web e2e audit check train retrain models schedule-doc map-items up down logs
+
+help: ## Lista os alvos
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+install: ## Instala dependências (backend + frontend + navegador do e2e)
+	cd backend && $(RUN) poetry sync
+	$(WEB) npm ci
+	$(WEB) npx playwright install chromium
+
+fmt: ## Formata o código
+	$(PY) ruff format src tests
+	$(PY) ruff check --fix src tests
+	$(WEB) npx biome check --write .
+
+lint: ## Lint (Ruff + Biome)
+	$(PY) ruff format --check src tests
+	$(PY) ruff check src tests
+	$(WEB) npx biome check .
+
+typecheck: ## mypy --strict + tsc
+	$(PY) mypy
+	$(WEB) npx tsc -b
+
+test: test-unit test-bdd test-http test-arch ## Testes rápidos (sem Docker)
+
+test-unit: ## Unitários do domínio, com gate de 100% de branches
+	$(PY) pytest tests/unit tests/features -q \
+	  --cov=developer_myself.learning.domain --cov=developer_myself.curriculum.domain --cov-branch --cov-report=term-missing:skip-covered \
+	  --cov-fail-under=100
+
+test-bdd: ## Cenários Gherkin (pt) via casos de uso
+	$(PY) pytest tests/features -v
+
+test-http: ## Adapter HTTP (em memória)
+	$(PY) pytest tests/http -q
+
+test-arch: ## Regra de dependência (AST)
+	$(PY) pytest tests/architecture -q
+
+test-int: ## Integração com Mongo e RabbitMQ reais (Testcontainers, precisa de Docker)
+	$(PY) pytest tests/integration -q
+
+test-web: ## Vitest + Testing Library
+	$(WEB) npx vitest run
+
+e2e: ## Smoke e2e em BDD (playwright-bdd) contra a API real em memória
+	$(WEB) npx vite build
+	$(WEB) npm run e2e
+
+audit: ## Supply chain: pip-audit + npm audit
+	$(PY) pip-audit --skip-editable
+	$(WEB) npm audit --omit=dev
+
+check: lint typecheck test test-web test-int ## Tudo que o CI roda
+
+train: ## Treina a rede neural de recomendação de revisão (gera model.json)
+	$(PY) python -m developer_myself.insights.adapters.neural.train
+
+retrain: ## Retreina AGORA com suas autoavaliações (stack no ar; o worker também faz sozinho)
+	docker compose exec worker python -m developer_myself.insights.adapters.neural.retrain --force
+
+models: ## Lista os modelos do registro (ativo primeiro) com as métricas principais
+	docker compose exec -T mongo mongosh --quiet developer_myself --eval 'db.ml_models.find({}, {active:1, created_at:1, "payload.metadata.real_samples":1, "payload.metadata.val_log_loss":1, "payload.metadata.promoted":1}).sort({created_at:-1}).limit(10).forEach(printjson)'
+
+schedule-doc: ## Gera Docs/Cronograma de estudos.md a partir da sua trilha (stack no ar)
+	docker compose exec -T api python -m developer_myself.curriculum.adapters.markdown > "Docs/Cronograma de estudos.md"
+	@echo "Gerado: Docs/Cronograma de estudos.md"
+
+map-items: ## Re-extrai os itens do PDF do mapa (o teste de cobertura usa) — rode quando o PDF mudar
+	pdftotext -layout "Docs/Mapa de conteúdos Fullstack, AppSec e DevOps.pdf" - \
+	  | python3 backend/tests/fixtures/extract_map_items.py > backend/tests/fixtures/mapa_itens.txt
+	@echo "Itens: $$(wc -l < backend/tests/fixtures/mapa_itens.txt). Rode: make test-unit"
+
+up: ## Sobe tudo com Docker Compose (http://localhost:8000)
+	@test -f .env || (cp .env.example .env && echo "Criei .env a partir de .env.example — troque a senha do RabbitMQ.")
+	docker compose up -d --build
+	@echo "Pronto: http://localhost:8000  (RabbitMQ: http://localhost:15672)"
+
+down: ## Derruba os containers (os dados ficam nos volumes)
+	docker compose down
+
+logs: ## Logs da API e do worker
+	docker compose logs -f api worker
