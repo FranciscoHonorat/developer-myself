@@ -18,6 +18,16 @@ describe("api (port HTTP)", () => {
     expect(init?.body).toBe(JSON.stringify({ content_id: "abc" }));
   });
 
+  it("salva o caderno com keepalive (sobrevive a recarregar a página) quando cabe", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => jsonResponse({ version: 1 }));
+    await api.saveNotebook("c1", "curto", 0);
+    await api.saveNotebook("c1", "a".repeat(70_000), 1);
+    expect(fetchMock.mock.calls[0]?.[1]?.keepalive).toBe(true);
+    expect(fetchMock.mock.calls[1]?.[1]?.keepalive).toBeFalsy(); // limite de 64 KiB do navegador
+  });
+
   it("não envia o cabeçalho CSRF em leituras", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
     await api.history();

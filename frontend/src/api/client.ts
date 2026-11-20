@@ -7,6 +7,8 @@ import type {
   ContentSchedule,
   MasteryLevel,
   Me,
+  Notebook,
+  NotebookSummary,
   NotesInput,
   Outcome,
   Plan,
@@ -29,14 +31,21 @@ export class ApiError extends Error {
   }
 }
 
+const KEEPALIVE_MAX_BYTES = 60_000;
+
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+async function request<T>(
+  method: Method,
+  path: string,
+  body?: unknown,
+  options: { keepalive?: boolean } = {},
+): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (method !== "GET") headers["X-Requested-With"] = "fetch"; // CSRF (ADR-0009)
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
-  const init: RequestInit = { method, headers, credentials: "same-origin" };
+  const init: RequestInit = { method, headers, credentials: "same-origin", ...options };
   if (body !== undefined) init.body = JSON.stringify(body);
   const response = await fetch(`/api${path}`, init);
 
@@ -99,4 +108,14 @@ export const api = {
     request<void>("PATCH", `/contents/${contentId}`, { title }),
   removeContent: (contentId: string) =>
     request<{ unlocked_content_id: string | null }>("DELETE", `/contents/${contentId}`),
+
+  notebook: (contentId: string) => request<Notebook>("GET", `/contents/${contentId}/notebook`),
+  // keepalive: o PUT termina mesmo se a página for recarregada/fechada no meio.
+  // O navegador limita o corpo keepalive a 64 KiB; acima disso vai um PUT normal.
+  saveNotebook: (contentId: string, text: string, version: number) => {
+    const body = { text, version };
+    const keepalive = new Blob([JSON.stringify(body)]).size < KEEPALIVE_MAX_BYTES;
+    return request<Notebook>("PUT", `/contents/${contentId}/notebook`, body, { keepalive });
+  },
+  notebooks: () => request<NotebookSummary[]>("GET", "/notebooks"),
 };

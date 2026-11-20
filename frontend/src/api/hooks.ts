@@ -13,6 +13,8 @@ export const keys = {
   week: ["week"] as const,
   competencies: ["competencies"] as const,
   schedule: (id: string) => ["schedule", id] as const,
+  notebook: (id: string) => ["notebook", id] as const,
+  notebooks: ["notebooks"] as const,
 };
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: api.me, retry: false });
@@ -26,6 +28,10 @@ export const useSchedule = (contentId: string, enabled: boolean) =>
 export const useCompetencies = () =>
   useQuery({ queryKey: keys.competencies, queryFn: api.competencies });
 export const useWeek = () => useQuery({ queryKey: keys.week, queryFn: api.week });
+// Caderno: o autosave do editor grava direto (sem `useCommand`, que invalidaria a trilha a cada tecla).
+export const useNotebook = (contentId: string) =>
+  useQuery({ queryKey: keys.notebook(contentId), queryFn: () => api.notebook(contentId) });
+export const useNotebooks = () => useQuery({ queryKey: keys.notebooks, queryFn: api.notebooks });
 export const useStats = () => useQuery({ queryKey: keys.stats, queryFn: () => api.stats() });
 
 function useCommand<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {

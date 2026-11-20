@@ -13,7 +13,11 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [["list"]],
   use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure" },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] }, grepInvert: /@celular/ },
+    // Pixel 7 no Chromium (já instalado): viewport de celular, toque e DPR reais.
+    { name: "celular", use: { ...devices["Pixel 7"] }, grep: /@celular/ },
+  ],
   // API real em modo memória servindo o build do React na mesma origem.
   webServer: {
     command: `cd ../backend && poetry run uvicorn developer_myself.main:app --port ${PORT}`,
