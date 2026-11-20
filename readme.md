@@ -26,6 +26,8 @@ As regras vivem em [`backend/tests/features/*.feature`](backend/tests/features) 
 | Cronograma | Cada conteúdo tem 30 dias: 1 sessão pontuada = 1 dia; dia 10 = Intermediário, dia 30 = Avançado. A tela mostra **📅 Hoje** (revisões + estudo) |
 | Competências | Aba **Competências**: nível por skill (Aprendiz → Especialista), meta do mapa, XP e nível geral. Sem revisar ou resolver desafios por **3 semanas**, a skill **enferruja** (os pontos ficam) |
 | Autoavaliação | Toda revisão pergunta "quanto você lembrava?" (1 Esqueci · 2 Difícil · 3 Bem · 4 Fácil); é o que ensina a rede neural |
+| Caderno | Bloco livre por matéria para escrever conceitos com as suas palavras, salvo sozinho enquanto você digita; **não pontua** e não substitui as 3 anotações. Abra na aba **Caderno** ou no botão 📓 do card |
+| Teste de memória | Toda revisão começa com 3 perguntas respondidas sem consultar; você confere, marca Errei/Parcial/Acertei e só então finaliza. Seu último "preciso revisar" aparece no topo de cada sessão |
 | Anti-trapaça | O servidor marca o tempo; 1 sessão ativa por vez; sessão > 4 h é abandonada e nunca pontua |
 
 ## Como usar
@@ -54,6 +56,10 @@ cd frontend && npm run dev     # http://localhost:5173 (proxy /api → :8000)
 | `make test-bdd` | Só os cenários Gherkin, com a saída verbosa |
 | `make test-int` | Mongo e RabbitMQ reais via Testcontainers |
 | `make e2e` | Smoke e2e em BDD (`playwright-bdd`) no Chromium |
+| `make deploy` | Sobe a imagem publicada pelo CD se mudou: verifica atestação, health check e rollback (`TAG=<sha>` fixa versão) |
+| `make autodeploy-on` / `-off` | Liga/desliga o deploy contínuo (timer do systemd a cada 5 min) |
+| `make autodeploy-logs` | Histórico dos deploys automáticos |
+| `make verify-image` | Confere a atestação de proveniência da imagem (`gh attestation verify`) |
 | `make audit` | `pip-audit` + `npm audit` |
 | `make train` | Treina o modelo-base da rede (só dados sintéticos, vai no `model.json`) |
 | `make retrain` | Retreina agora com suas autoavaliações (o worker também faz sozinho, de hora em hora) |

@@ -17,14 +17,35 @@ Há um desenvolvedor e um usuário. O objetivo é feedback rápido e um caminho 
 ### Pipeline (GitHub Actions), cada job chamando `make`
 
 ```
-lint+typecheck ─▶ unit+bdd ─▶ integration (Testcontainers) ─▶ security (gitleaks, pip-audit, npm audit, Trivy) ─▶ build image
+lint+typecheck ─▶ unit+bdd ─▶ integration (Testcontainers) ─▶ security (gitleaks, pip-audit, npm audit, Trivy) ─▶ build image ─▶ publish (só master)
 ```
 
-Os jobs rodam com cache de Poetry e npm, e PRs não fazem merge com o pipeline vermelho.
+O pipeline roda em todo PR e em todo push na `master`.
 
-### Imagem
+### Entrega contínua (CD)
 
-Multi-stage. O estágio de build roda `poetry sync --only main` e o de runtime usa `python:3.15-slim`, com usuário sem root, `HEALTHCHECK` e **digest fixo**.
+Depois que o pipeline inteiro fica verde num push na `master`, o job `publish` faz três coisas:
+
+1. Publica a imagem no GitHub Container Registry como `ghcr.io/franciscohonorat/developer-myself`, com as tags `<sha do commit>` e `latest`.
+2. Gera uma **atestação de proveniência** (SLSA, assinada via OIDC) ligada ao digest da imagem.
+3. Escreve o digest no resumo do workflow.
+
+**Deploy contínuo por *pull*.** Quem busca a imagem é a máquina que roda o app, não o CI. Assim não há chave SSH no CI, nenhuma porta fica aberta para a internet e não é preciso runner self-hosted, que é inseguro num repositório público porque PRs de forks rodariam código nele.
+
+Um timer do systemd do usuário (`make autodeploy-on`) roda `scripts/deploy.sh` a cada 5 minutos:
+
+1. faz `docker pull` de `latest` e sai se a imagem não mudou;
+2. verifica a **atestação**: só sobe imagem que comprovadamente saiu do CI deste repositório;
+3. marca a versão em execução como `developer-myself:previous`;
+4. sobe a `api` e o `worker` **pelo digest**;
+5. espera o `/readyz` responder; se não responder em 90 s, faz **rollback** para `:previous` e o script falha (aparece no `journalctl`).
+
+`make deploy` roda o mesmo script na hora, e `make deploy TAG=<sha>` fixa uma versão. Do commit verde ao app no ar, o tempo fica em torno de 5 minutos mais o tempo do pipeline.
+
+Limites conhecidos:
+- O timer só roda com a sessão do usuário ativa, a menos que se use `loginctl enable-linger`.
+- A verificação usa o `gh` autenticado. Sem sessão, o keyring fica trancado, a verificação falha e o deploy não acontece (falha segura).
+- As migrações de esquema, se um dia existirem, precisam ser compatíveis com a versão anterior para o rollback funcionar.
 
 ### Configuração (12-factor)
 

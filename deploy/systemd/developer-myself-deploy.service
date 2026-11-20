@@ -1,0 +1,11 @@
+# Instalado por `make autodeploy-on` (o caminho do repositório é preenchido na instalação).
+[Unit]
+Description=developer-myself: deploy contínuo da imagem publicada pelo CD
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO@
+ExecStart=@REPO@/scripts/deploy.sh latest
+TimeoutStartSec=600
