@@ -1,7 +1,8 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionRecord } from "@/api/types";
-import { renderWithClient, routeFetch } from "@/test/render";
+import { callTo, renderWithClient, routeFetch } from "@/test/render";
 import { SessionHistory } from "./SessionHistory";
 
 afterEach(() => vi.restoreAllMocks());
@@ -44,7 +45,10 @@ const review: SessionRecord = {
 
 describe("SessionHistory", () => {
   it("mostra o teste de memória da revisão", async () => {
-    routeFetch({ "/history?limit=50": [review], "/stats?days=30": stats });
+    routeFetch({
+      "/history?limit=20": { items: [review], next_cursor: null },
+      "/stats?days=30": stats,
+    });
     renderWithClient(<SessionHistory />);
     expect(await screen.findByText("Explique sem consultar: CQS")).toBeInTheDocument();
     expect(screen.getByText("comando muda, consulta lê")).toBeInTheDocument();
@@ -52,7 +56,10 @@ describe("SessionHistory", () => {
   });
 
   it("sessão sem teste não mostra a seção", async () => {
-    routeFetch({ "/history?limit=50": [{ ...review, recall_test: [] }], "/stats?days=30": stats });
+    routeFetch({
+      "/history?limit=20": { items: [{ ...review, recall_test: [] }], next_cursor: null },
+      "/stats?days=30": stats,
+    });
     renderWithClient(<SessionHistory />);
     expect(await screen.findByText(/Clean Code/)).toBeInTheDocument();
     expect(screen.queryByText("Teste de memória")).not.toBeInTheDocument();
@@ -67,7 +74,6 @@ describe("SessionHistory", () => {
         total_minutes: 600,
         current_streak_days: 6,
       },
-      "/history": [],
     });
     renderWithClient(<SessionHistory />);
     const summary = await screen.findByRole("region", { name: "Estatísticas dos últimos 30 dias" });
@@ -76,5 +82,20 @@ describe("SessionHistory", () => {
     expect(summary).toHaveTextContent("12");
     expect(summary).toHaveTextContent("10.0");
     expect(await screen.findByText("Nenhuma sessão ainda.")).toBeInTheDocument();
+  });
+
+  it("carrega a página seguinte do histórico pelo cursor", async () => {
+    const older = { ...review, event_id: "e0", content_title: "Refactoring", recall_test: [] };
+    const fetchMock = routeFetch({
+      "/history?limit=20": { items: [review], next_cursor: "abc" },
+      "/history?limit=20&cursor=abc": { items: [older], next_cursor: null },
+      "/stats?days=30": stats,
+    });
+    renderWithClient(<SessionHistory />);
+    await userEvent.click(await screen.findByRole("button", { name: "Carregar mais" }));
+    expect(await screen.findByText("Refactoring")).toBeInTheDocument();
+    expect(screen.getByText("Clean Code")).toBeInTheDocument();
+    expect(callTo(fetchMock, "/history?limit=20&cursor=abc")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Carregar mais" })).not.toBeInTheDocument();
   });
 });

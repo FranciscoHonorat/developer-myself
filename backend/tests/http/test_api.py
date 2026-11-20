@@ -108,7 +108,7 @@ def test_finish_review_with_answers_records_the_test(client: TestClient, clock: 
     body = {**NOTES, "recall_rating": 2, "answers": answer_all(client, "PARTIAL")}
     r = client.post("/api/sessions/current/finish", json=body, headers=H)
     assert r.status_code == 200
-    test = client.get("/api/history").json()[0]["recall_test"]
+    test = client.get("/api/history").json()["items"][0]["recall_test"]
     assert len(test) == 3
     assert {i["grade"] for i in test} == {"PARTIAL"}
     assert set(test[0]) == {"text", "source", "answer", "grade", "useful"}
@@ -128,7 +128,7 @@ def test_study_history_has_empty_recall_test(client: TestClient, clock: FakeCloc
     client.post("/api/sessions", json={"content_id": content["id"]}, headers=H)
     clock.advance(minutes=25)
     client.post("/api/sessions/current/finish", json=NOTES, headers=H)
-    assert client.get("/api/history").json()[0]["recall_test"] == []
+    assert client.get("/api/history").json()["items"][0]["recall_test"] == []
 
 
 def test_health(client: TestClient) -> None:
@@ -157,7 +157,7 @@ def test_full_session_flow(client: TestClient, clock: FakeClock) -> None:
     assert outcome["awarded"] is True
     assert outcome["total_points"] == 1
 
-    history = client.get("/api/history").json()
+    history = client.get("/api/history").json()["items"]
     assert len(history) == 1
     assert history[0]["notes_to_review"] == NOTES["to_review"]
     stats = client.get("/api/stats?days=7").json()
@@ -332,7 +332,7 @@ def test_review_requires_recall_rating(client: TestClient, clock: FakeClock) -> 
     r = client.post("/api/sessions/current/finish", json=body, headers=H)
     assert r.status_code == 200
     assert r.json()["kind"] == "REVIEW"
-    history = client.get("/api/history").json()
+    history = client.get("/api/history").json()["items"]
     assert history[0]["recall_rating"] == 3
 
 
@@ -533,3 +533,34 @@ def test_export_includes_notebooks_and_delete_account_erases_them(client: TestCl
     container = client.app.state.container  # type: ignore[attr-defined]
     client.post("/api/auth/delete-account", json={"password": PASSWORD}, headers=H)
     assert client.portal.call(container.learning.notebooks.list, uuid.UUID(learner_id)) == []  # type: ignore[union-attr]
+
+
+def test_history_is_paginated_by_cursor(client: TestClient, clock: FakeClock) -> None:
+    register(client)
+    content = add_content(client, "Clean Code")
+    for _ in range(3):
+        client.post("/api/sessions", json={"content_id": content["id"]}, headers=H)
+        clock.advance(minutes=25)
+        client.post("/api/sessions/current/finish", json=NOTES, headers=H)
+
+    first = client.get("/api/history", params={"limit": 2}).json()
+    assert len(first["items"]) == 2
+    assert first["next_cursor"]
+    second = client.get("/api/history", params={"limit": 2, "cursor": first["next_cursor"]}).json()
+    assert len(second["items"]) == 1
+    assert second["next_cursor"] is None
+    seen = [s["event_id"] for s in first["items"] + second["items"]]
+    assert len(set(seen)) == 3
+
+
+@pytest.mark.parametrize("cursor", ["lixo", "e30", "eyJ0IjoiMjAyNiJ9"])
+def test_history_rejects_a_tampered_cursor(client: TestClient, cursor: str) -> None:
+    register(client)
+    r = client.get("/api/history", params={"cursor": cursor})
+    assert r.status_code == 422
+    assert r.json()["code"] == "INVALID_CURSOR"
+
+
+def test_history_page_size_is_bounded(client: TestClient) -> None:
+    register(client)
+    assert client.get("/api/history", params={"limit": 101}).status_code == 422

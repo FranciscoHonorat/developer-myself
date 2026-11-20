@@ -10,6 +10,7 @@ import {
 } from "@/api/labels";
 import type { RecallGrade } from "@/api/types";
 import { ErrorState } from "@/components/ErrorState";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ const GRADE_TONE: Record<RecallGrade, string> = {
 export function SessionHistory() {
   const stats = useStats();
   const history = useHistory();
+  const sessions = history.data?.pages.flatMap((p) => p.items);
 
   return (
     <div className="flex flex-col gap-6">
@@ -77,13 +79,13 @@ export function SessionHistory() {
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Sessões</h2>
         {history.isPending && <Skeleton className="h-24 w-full" />}
-        {history.data?.length === 0 && (
+        {sessions?.length === 0 && (
           <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
             Nenhuma sessão ainda.
           </p>
         )}
         <ul className="flex flex-col gap-3">
-          {history.data?.map((s) => (
+          {sessions?.map((s) => (
             <li key={s.event_id} className="flex flex-col gap-2 rounded-xl border bg-card p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <strong className="flex items-center gap-2 font-medium">
@@ -142,6 +144,16 @@ export function SessionHistory() {
             </li>
           ))}
         </ul>
+        {history.hasNextPage && (
+          <Button
+            variant="outline"
+            className="self-center"
+            onClick={() => void history.fetchNextPage()}
+            disabled={history.isFetchingNextPage}
+          >
+            {history.isFetchingNextPage ? "Carregando…" : "Carregar mais"}
+          </Button>
+        )}
       </section>
     </div>
   );

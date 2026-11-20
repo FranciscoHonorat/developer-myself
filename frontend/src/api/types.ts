@@ -103,6 +103,12 @@ export interface Outcome {
   unlocked_content_id: string | null;
 }
 
+/** Uma página do histórico. `next_cursor` é opaco: só devolvê-lo para pedir a próxima. */
+export interface HistoryPage {
+  items: SessionRecord[];
+  next_cursor: string | null;
+}
+
 export interface SessionRecord {
   event_id: string;
   type: "study_session_finished" | "study_session_abandoned";

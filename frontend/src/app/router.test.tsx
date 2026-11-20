@@ -51,6 +51,7 @@ function fakeApi(opts: { loggedIn: boolean; plan?: Plan }) {
     if (path.endsWith("/notebook")) {
       return jsonResponse({ content_id: "c1", text: "", version: 0, updated_at: null });
     }
+    if (path.includes("/history?")) return jsonResponse({ items: [], next_cursor: null });
     if (path.includes("/stats"))
       return jsonResponse({
         total_sessions: 0,

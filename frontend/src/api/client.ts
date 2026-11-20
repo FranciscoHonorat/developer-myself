@@ -5,6 +5,7 @@ import type {
   Content,
   ContentKind,
   ContentSchedule,
+  HistoryPage,
   MasteryLevel,
   Me,
   Notebook,
@@ -14,7 +15,6 @@ import type {
   Plan,
   Recommendations,
   SessionKind,
-  SessionRecord,
   Stats,
   Today,
   Week,
@@ -93,7 +93,11 @@ export const api = {
   finishSession: (notes: NotesInput) => request<Outcome>("POST", "/sessions/current/finish", notes),
   cancelSession: () => request<void>("POST", "/sessions/current/cancel"),
 
-  history: (limit = 50) => request<SessionRecord[]>("GET", `/history?limit=${limit}`),
+  history: (cursor: string | null = null, limit = 20) =>
+    request<HistoryPage>(
+      "GET",
+      `/history?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
   stats: (days = 30) => request<Stats>("GET", `/stats?days=${days}`),
   exportData: () => request<unknown>("GET", "/export"),
   recommendations: () => request<Recommendations>("GET", "/recommendations"),

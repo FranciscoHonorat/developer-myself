@@ -20,7 +20,6 @@ from developer_myself import (
 from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.identity.adapters.argon2_hasher import Argon2PasswordHasher
 from developer_myself.identity.adapters.http import routes as identity_routes
-from developer_myself.identity.adapters.http.rate_limit import SlidingWindowLimiter
 from developer_myself.identity.adapters.memory.repositories import (
     InMemoryAuthSessionRepository,
     InMemoryUserRepository,
@@ -56,7 +55,12 @@ from developer_myself.learning.domain.errors import (
 )
 from developer_myself.learning.domain.value_objects import LearnerId
 from developer_myself.review_questions import RuleQuestionPicker
-from developer_myself.shared.adapters.http import RequestContextMiddleware
+from developer_myself.shared.adapters.http import (
+    RateLimitMiddleware,
+    RequestContextMiddleware,
+    rate_limit_rules,
+)
+from developer_myself.shared.adapters.rate_limit import SlidingWindowLimiter
 from developer_myself.shared.clock import Clock, SystemClock
 from developer_myself.shared.logging import configure_logging, log
 from developer_myself.shared.settings import Settings
@@ -199,6 +203,8 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     if container is not None:  # testes sem lifespan
         app.state.container = container
         app.state.authenticate = _authenticator(container)
+    # O último adicionado é o mais externo: o 429 ainda ganha correlation id e cabeçalhos.
+    app.add_middleware(RateLimitMiddleware, rules=rate_limit_rules(settings))
     app.add_middleware(RequestContextMiddleware)
     _install_error_handlers(app)
 

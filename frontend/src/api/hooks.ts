@@ -1,5 +1,5 @@
 // TanStack Query: o estado global é o servidor. Cada comando invalida o que mudou.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 import type { ContentKind, MasteryLevel, NotesInput } from "./types";
 
@@ -19,7 +19,14 @@ export const keys = {
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: api.me, retry: false });
 export const usePlan = () => useQuery({ queryKey: keys.plan, queryFn: api.plan });
-export const useHistory = () => useQuery({ queryKey: keys.history, queryFn: () => api.history() });
+// Histórico paginado por cursor: cada página pede a seguinte com o `next_cursor` da anterior.
+export const useHistory = () =>
+  useInfiniteQuery({
+    queryKey: keys.history,
+    queryFn: ({ pageParam }) => api.history(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.next_cursor,
+  });
 export const useRecommendations = () =>
   useQuery({ queryKey: keys.recommendations, queryFn: api.recommendations });
 export const useToday = () => useQuery({ queryKey: keys.today, queryFn: api.today });

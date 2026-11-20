@@ -53,13 +53,15 @@ export function makeContent(overrides: Partial<Content> = {}): Content {
 
 /**
  * `fetch` roteado por caminho: cada chamada recebe um Response novo (o corpo só pode ser lido
- * uma vez). Cadernos (`/notebook`) respondem vazios por padrão; o resto, `[]`.
+ * uma vez). Cadernos (`/notebook`) e o histórico paginado respondem vazios por padrão; o
+ * resto, `[]`.
  */
 export function routeFetch(routes: Record<string, unknown> = {}) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const path = String(input);
     const match = Object.keys(routes).find((p) => path.endsWith(p));
     if (match !== undefined) return jsonResponse(routes[match]);
+    if (path.includes("/history?")) return jsonResponse({ items: [], next_cursor: null });
     if (path.endsWith("/notebook")) {
       const contentId = path.split("/").at(-2) ?? "";
       return jsonResponse({ content_id: contentId, text: "", version: 0, updated_at: null });

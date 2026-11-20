@@ -29,6 +29,8 @@ export default defineConfig({
       DM_COOKIE_SECURE: "false",
       DM_STATIC_DIR: "../frontend/dist",
       DM_LOG_LEVEL: "WARNING",
+      // Cada cenário cadastra um usuário do mesmo IP; o limite de cadastro é testado no backend.
+      DM_RATE_LIMIT_REGISTERS_PER_HOUR: "0",
     },
   },
 });

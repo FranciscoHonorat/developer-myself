@@ -8,7 +8,7 @@ from typing import Any
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
 
-from developer_myself.insights.application.history import SessionRecord
+from developer_myself.insights.application.history import HistoryCursor, SessionRecord
 
 Doc = dict[str, Any]
 
@@ -42,8 +42,23 @@ class MongoSessionHistoryStore:
             query["finished_at"] = {"$gte": since}
         return await self._find(query, sort=-1, limit=limit)
 
+    async def page_for(
+        self, learner_id: str, limit: int, after: HistoryCursor | None = None
+    ) -> list[SessionRecord]:
+        query: Doc = {"learner_id": learner_id}
+        if after is not None:
+            # Keyset: estritamente "antes" do cursor; o _id desempata horários iguais.
+            query["$or"] = [
+                {"finished_at": {"$lt": after.finished_at}},
+                {"finished_at": after.finished_at, "_id": {"$lt": after.event_id}},
+            ]
+        return await self._find(query, sort=-1, limit=limit)
+
     async def _find(self, query: Doc, sort: int, limit: int) -> list[SessionRecord]:
-        cursor = self._sessions.find(query).sort("finished_at", sort).limit(limit)
+        # O índice `history` (learner_id, finished_at) cobre o filtro; _id só desempata.
+        cursor = (
+            self._sessions.find(query).sort([("finished_at", sort), ("_id", sort)]).limit(limit)
+        )
         records = []
         async for doc in cursor:
             doc["event_id"] = doc.pop("_id")
