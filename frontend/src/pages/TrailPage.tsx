@@ -3,9 +3,15 @@ import { usePlan } from "@/api/hooks";
 import { recallTestOn } from "@/api/recall";
 import type { Content, Plan } from "@/api/types";
 import { ErrorState } from "@/components/ErrorState";
+import { Pagination } from "@/components/Pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddContentDialog } from "@/features/trail/AddContentDialog";
 import { ContentCard } from "@/features/trail/ContentCard";
+import { paginate } from "@/lib/paginate";
+import { usePageParam } from "@/lib/usePageParam";
+
+/** Cartões por página em "Para revisar" e "Fila" (grade de 2 colunas: 3 linhas). */
+export const TRAIL_PAGE_SIZE = 6;
 
 function Section({
   id,
@@ -42,6 +48,28 @@ function Cards({ contents, plan }: { contents: Content[]; plan: Plan }) {
         />
       ))}
     </div>
+  );
+}
+
+/** Seção longa em páginas; a página vive na URL (`?{param}=N`). */
+function PagedCards({
+  contents,
+  plan,
+  param,
+  label,
+}: {
+  contents: Content[];
+  plan: Plan;
+  param: string;
+  label: string;
+}) {
+  const [requested, setPage] = usePageParam(param);
+  const { items, page, totalPages } = paginate(contents, requested ?? 1, TRAIL_PAGE_SIZE);
+  return (
+    <>
+      <Cards contents={items} plan={plan} />
+      <Pagination page={page} totalPages={totalPages} onChange={setPage} label={label} />
+    </>
   );
 }
 
@@ -93,13 +121,13 @@ export function TrailPage() {
 
       {review.length > 0 && (
         <Section id="h-review" title="Para revisar">
-          <Cards contents={review} plan={p} />
+          <PagedCards contents={review} plan={p} param="revisar" label="Para revisar" />
         </Section>
       )}
 
       {queue.length > 0 && (
         <Section id="h-queue" title="Fila">
-          <Cards contents={queue} plan={p} />
+          <PagedCards contents={queue} plan={p} param="fila" label="Fila" />
         </Section>
       )}
     </div>

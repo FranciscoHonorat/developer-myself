@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { makePlan } from "@/test/fixtures";
 import { callTo, makeContent, renderWithClient, routeFetch } from "@/test/render";
@@ -71,5 +71,59 @@ describe("TrailPage", () => {
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Adicionar" }));
     expect(callTo(fetchMock, "/contents")).toBeUndefined();
+  });
+
+  describe("paginação", () => {
+    const longQueue = makePlan({
+      contents: [
+        makeContent({ id: "c1", title: "Clean Code" }),
+        ...Array.from({ length: 8 }, (_, i) =>
+          makeContent({
+            id: `q${i + 1}`,
+            title: `Fila ${i + 1}`,
+            status: "LOCKED",
+            queue_position: i + 1,
+          }),
+        ),
+      ],
+    });
+
+    function renderQueue(path = "/trilha") {
+      routeFetch({ "/plan": longQueue });
+      const router = createMemoryRouter([{ path: "/trilha", element: <TrailPage /> }], {
+        initialEntries: [path],
+      });
+      renderWithClient(<RouterProvider router={router} />);
+      return router;
+    }
+
+    const queueTitles = () =>
+      within(screen.getByRole("region", { name: "Fila" }))
+        .getAllByRole("article")
+        .map((a) => a.getAttribute("aria-label"));
+
+    it("mostra 6 por página e avança pela fila na ordem", async () => {
+      const router = renderQueue();
+      await screen.findByRole("region", { name: "Fila" });
+      expect(queueTitles()).toEqual(["Fila 1", "Fila 2", "Fila 3", "Fila 4", "Fila 5", "Fila 6"]);
+      await userEvent.click(screen.getByRole("button", { name: "Próxima" }));
+      expect(queueTitles()).toEqual(["Fila 7", "Fila 8"]);
+      expect(router.state.location.search).toBe("?fila=2");
+    });
+
+    it("abre direto na página da URL (F5)", async () => {
+      renderQueue("/trilha?fila=2");
+      await screen.findByRole("region", { name: "Fila" });
+      expect(queueTitles()).toEqual(["Fila 7", "Fila 8"]);
+      expect(screen.getByRole("navigation", { name: "Páginas de Fila" })).toHaveTextContent(
+        "Página 2 de 2",
+      );
+    });
+
+    it("seção que cabe numa página não mostra controles", async () => {
+      renderTrail();
+      await screen.findByRole("region", { name: "Fila" });
+      expect(screen.queryByRole("navigation", { name: /Páginas de/ })).not.toBeInTheDocument();
+    });
   });
 });
