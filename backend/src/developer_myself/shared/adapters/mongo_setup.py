@@ -40,7 +40,11 @@ STUDY_PLAN_SCHEMA: Doc = {
         "active_session": {
             "bsonType": ["object", "null"],
             "required": ["content_id", "started_at"],
-            "properties": {"content_id": _UUID, "started_at": _DATE},
+            "properties": {
+                "content_id": _UUID,
+                "started_at": _DATE,
+                "questions": {"bsonType": "array"},
+            },
         },
         "contents": {
             "bsonType": "array",
@@ -56,6 +60,7 @@ STUDY_PLAN_SCHEMA: Doc = {
                     "queued_at": _DATE,
                     "last_session_at": _DATE_OR_NULL,
                     "finished_at": _DATE_OR_NULL,
+                    "last_to_review": {"bsonType": ["string", "null"]},
                     "challenges": {"bsonType": "array"},
                 },
             },
@@ -81,6 +86,19 @@ AUTH_SESSION_SCHEMA: Doc = {
     "properties": {"_id": {"bsonType": "string"}, "user_id": _UUID, "expires_at": _DATE},
 }
 
+NOTEBOOK_SCHEMA: Doc = {
+    "bsonType": "object",
+    "required": ["_id", "learner_id", "text", "version", "updated_at"],
+    "properties": {
+        "_id": _UUID,
+        "learner_id": _UUID,
+        # = NOTEBOOK_MAX_CHARS (shared não importa contextos; test_notebook confere).
+        "text": {"bsonType": "string", "maxLength": 100_000},
+        "version": {"bsonType": ["int", "long"], "minimum": 1},
+        "updated_at": _DATE,
+    },
+}
+
 STUDY_SESSION_SCHEMA: Doc = {
     "bsonType": "object",
     "required": ["_id", "learner_id", "type", "content_id", "started_at", "finished_at"],
@@ -101,6 +119,7 @@ async def ensure_schema(db: AsyncDatabase[Doc]) -> None:
     await _ensure_collection(db, "auth_sessions", AUTH_SESSION_SCHEMA)
     await _ensure_collection(db, "study_sessions", STUDY_SESSION_SCHEMA)
     await _ensure_collection(db, "processed_events", {"bsonType": "object"})
+    await _ensure_collection(db, "notebooks", NOTEBOOK_SCHEMA)
 
     await db.study_plans.create_indexes(
         [
@@ -122,6 +141,9 @@ async def ensure_schema(db: AsyncDatabase[Doc]) -> None:
     )
     await db.study_sessions.create_indexes(
         [IndexModel([("learner_id", ASCENDING), ("finished_at", DESCENDING)], name="history")]
+    )
+    await db.notebooks.create_indexes(
+        [IndexModel([("learner_id", ASCENDING), ("updated_at", DESCENDING)], name="by_learner")]
     )
     await db.ml_models.create_indexes(
         [IndexModel([("active", ASCENDING), ("created_at", DESCENDING)], name="active_latest")]

@@ -17,9 +17,11 @@ from developer_myself.insights.adapters.neural.provider import RecommenderProvid
 from developer_myself.insights.adapters.neural.recommender import load_best_recommender
 from developer_myself.insights.adapters.neural.retrain import RetrainJob
 from developer_myself.insights.application.history import HistoryQueries, RecordSessionHistory
+from developer_myself.learning.adapters.mongo.notebook_repository import MongoNotebookRepository
 from developer_myself.learning.adapters.mongo.repository import MongoStudyPlanRepository
 from developer_myself.learning.application.use_cases import LearningUseCases
 from developer_myself.learning.domain.value_objects import LearnerId
+from developer_myself.review_questions import RuleQuestionPicker
 from developer_myself.shared.adapters.mongo_setup import ensure_schema, make_client
 from developer_myself.shared.clock import Clock, SystemClock
 from developer_myself.shared.settings import Settings
@@ -32,6 +34,7 @@ async def build_mongo_container(settings: Settings, clock: Clock | None = None) 
     await ensure_schema(db)
 
     plans = MongoStudyPlanRepository(db.study_plans)
+    notebooks = MongoNotebookRepository(db.notebooks)
     store = MongoSessionHistoryStore(db.study_sessions, db.processed_events)
     users = MongoUserRepository(db.users)
     auth_sessions = MongoAuthSessionRepository(db.auth_sessions)
@@ -40,6 +43,7 @@ async def build_mongo_container(settings: Settings, clock: Clock | None = None) 
     async def erase(learner_id: uuid.UUID) -> None:
         await plans.delete(LearnerId(learner_id))
         await store.delete_for(str(learner_id))
+        await notebooks.delete_all(LearnerId(learner_id))
 
     async def ping_mongo() -> None:
         await client.admin.command("ping")
@@ -51,7 +55,11 @@ async def build_mongo_container(settings: Settings, clock: Clock | None = None) 
         settings=settings,
         clock=clock,
         learning=LearningUseCases.build(
-            plans, clock, CatalogUnlockPolicy(settings.max_parallel_contents)
+            plans,
+            clock,
+            CatalogUnlockPolicy(settings.max_parallel_contents),
+            notebooks=notebooks,
+            question_picker=RuleQuestionPicker(),
         ),
         identity=IdentityUseCases(
             users,

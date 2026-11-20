@@ -4,6 +4,9 @@ name: developer-myself
 
 x-app: &app
   build: .
+  # `make up` constrói localmente (developer-myself:local); `make deploy` usa a imagem
+  # publicada pelo CD: DM_IMAGE=ghcr.io/franciscohonorat/developer-myself:<tag>.
+  image: ${DM_IMAGE:-developer-myself:local}
   env_file: [.env]
   environment:
     DM_STORAGE: mongo

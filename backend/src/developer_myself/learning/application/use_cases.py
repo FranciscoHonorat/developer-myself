@@ -6,10 +6,16 @@ Padrão: carregar o agregado → chamar `clock.now()` → executar o comando →
 import uuid
 from dataclasses import dataclass
 
+from developer_myself.learning.application.notebooks import NotebookUseCases
+from developer_myself.learning.application.questions import QuestionPicker
 from developer_myself.learning.domain.content import Challenge, Content
-from developer_myself.learning.domain.errors import DomainError, InvalidValueError
+from developer_myself.learning.domain.errors import (
+    DomainError,
+    InvalidValueError,
+    StudyPlanNotFoundError,
+)
 from developer_myself.learning.domain.policies import UnlockPolicy
-from developer_myself.learning.domain.repository import StudyPlanRepository
+from developer_myself.learning.domain.repository import NotebookRepository, StudyPlanRepository
 from developer_myself.learning.domain.study_plan import SessionOutcome, StudyPlan
 from developer_myself.learning.domain.value_objects import (
     ChallengeId,
@@ -19,6 +25,8 @@ from developer_myself.learning.domain.value_objects import (
     LearnerId,
     MasteryLevel,
     Notes,
+    RecallAnswer,
+    RecallGrade,
     RecallRating,
     SessionKind,
     StudyPreferences,
@@ -26,10 +34,6 @@ from developer_myself.learning.domain.value_objects import (
     Title,
 )
 from developer_myself.shared.clock import Clock
-
-
-class StudyPlanNotFoundError(DomainError):
-    pass
 
 
 @dataclass(slots=True)
@@ -88,10 +92,19 @@ class AddContent(_UseCase):
 
 @dataclass(slots=True)
 class StartSession(_UseCase):
+    question_picker: QuestionPicker | None = None
+
     async def __call__(self, learner_id: uuid.UUID, content_id: uuid.UUID) -> SessionKind:
         plan = await self._load(learner_id)
+        now = self.clock.now()
         try:
-            kind = plan.start_session(ContentId(content_id), self.clock.now())
+            content = plan.content(ContentId(content_id))
+            questions = (
+                self.question_picker.pick(plan, content, now)
+                if self.question_picker is not None and content.session_kind is SessionKind.REVIEW
+                else ()
+            )
+            kind = plan.start_session(content.id, now, questions)
         except DomainError:
             # Uma sessão expirada pode ter sido abandonada antes do erro: persistir isso.
             if plan.pending_events:
@@ -108,6 +121,22 @@ class NotesInput:
     to_review: str
 
 
+@dataclass(frozen=True, slots=True)
+class AnswerInput:
+    question_id: uuid.UUID
+    answer: str
+    grade: str
+    useful: bool | None = None
+
+
+def _answer(item: AnswerInput) -> RecallAnswer:
+    try:
+        grade = RecallGrade(item.grade)
+    except ValueError as exc:
+        raise InvalidValueError("Corrija com Errei, Parcial ou Acertei.") from exc
+    return RecallAnswer(item.question_id, item.answer, grade, item.useful)
+
+
 def _rating(value: int | None) -> RecallRating | None:
     if value is None:
         return None
@@ -120,12 +149,19 @@ def _rating(value: int | None) -> RecallRating | None:
 @dataclass(slots=True)
 class FinishSession(_UseCase):
     async def __call__(
-        self, learner_id: uuid.UUID, notes: NotesInput, recall_rating: int | None = None
+        self,
+        learner_id: uuid.UUID,
+        notes: NotesInput,
+        recall_rating: int | None = None,
+        answers: list[AnswerInput] | None = None,
     ) -> SessionOutcome:
         plan = await self._load(learner_id)
         rating = _rating(recall_rating)
         outcome = plan.finish_session(
-            Notes(notes.studied, notes.understood, notes.to_review), self.clock.now(), rating
+            Notes(notes.studied, notes.understood, notes.to_review),
+            self.clock.now(),
+            rating,
+            tuple(_answer(a) for a in answers or ()),
         )
         await self.repository.save(plan)
         return outcome
@@ -184,10 +220,14 @@ class FinishContent(_UseCase):
 
 @dataclass(slots=True)
 class RemoveContent(_UseCase):
+    notebooks: NotebookRepository | None = None
+
     async def __call__(self, learner_id: uuid.UUID, content_id: uuid.UUID) -> ContentId | None:
         plan = await self._load(learner_id)
         unlocked = plan.remove_content(ContentId(content_id), self.clock.now())
         await self.repository.save(plan)
+        if self.notebooks is not None:
+            await self.notebooks.delete(LearnerId(learner_id), ContentId(content_id))
         return unlocked
 
 
@@ -250,6 +290,7 @@ class LearningUseCases:
     refresh_queue: RefreshQueue
     reorder_queue: ReorderQueue
     change_preferences: ChangePreferences
+    notebooks: NotebookUseCases
 
     @classmethod
     def build(
@@ -257,6 +298,9 @@ class LearningUseCases:
         repository: StudyPlanRepository,
         clock: Clock,
         unlock_policy: UnlockPolicy | None = None,
+        *,
+        notebooks: NotebookRepository,
+        question_picker: QuestionPicker | None = None,
     ) -> LearningUseCases:
         args = (repository, clock, unlock_policy)
         return cls(
@@ -264,15 +308,16 @@ class LearningUseCases:
             get_plan=GetStudyPlan(*args),
             change_timezone=ChangeTimezone(*args),
             add_content=AddContent(*args),
-            start_session=StartSession(*args),
+            start_session=StartSession(*args, question_picker=question_picker),
             finish_session=FinishSession(*args),
             cancel_session=CancelSession(*args),
             add_challenge=AddChallenge(*args),
             solve_challenge=SolveChallenge(*args),
             finish_content=FinishContent(*args),
-            remove_content=RemoveContent(*args),
+            remove_content=RemoveContent(*args, notebooks=notebooks),
             rename_content=RenameContent(*args),
             refresh_queue=RefreshQueue(*args),
             reorder_queue=ReorderQueue(*args),
             change_preferences=ChangePreferences(*args),
+            notebooks=NotebookUseCases(repository, notebooks, clock),
         )

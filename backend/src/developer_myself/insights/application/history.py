@@ -5,7 +5,7 @@ Recebe envelopes (dicionários) — nunca importa o modelo do `learning`.
 
 import uuid
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
@@ -40,6 +40,8 @@ class SessionRecord:
     days_since_first_session: float | None = None
     avg_notes_chars_before: float = 0.0
     last_recall_rating_before: int | None = None
+    # Teste de memória da revisão: pergunta, origem, resposta e correção (dataset da IA).
+    recall_test: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def is_labeled_review(self) -> bool:
@@ -81,6 +83,7 @@ class SessionRecord:
                 days_since_first_session=p.get("days_since_first_session"),
                 avg_notes_chars_before=p.get("avg_notes_chars_before", 0.0),
                 last_recall_rating_before=p.get("last_recall_rating_before"),
+                recall_test=p.get("recall_test", []),
             )
         occurred = datetime.fromisoformat(envelope["occurred_at"])
         return cls(

@@ -24,6 +24,8 @@ from developer_myself.learning.domain.value_objects import (
     LearnerId,
     MasteryLevel,
     Points,
+    QuestionSource,
+    RecallQuestion,
     RecallRating,
     StudyPreferences,
     Timezone,
@@ -32,7 +34,7 @@ from developer_myself.learning.domain.value_objects import (
 from developer_myself.shared.correlation import get_correlation_id
 from developer_myself.shared.events import envelope
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 Doc = dict[str, Any]
 
 
@@ -61,6 +63,16 @@ def to_document(plan: StudyPlan) -> Doc:
             {
                 "content_id": plan.active_session.content_id.value,
                 "started_at": plan.active_session.started_at,
+                "questions": [
+                    {
+                        "id": q.id,
+                        "text": q.text,
+                        "source": q.source.value,
+                        "template": q.template,
+                        "topic": q.topic,
+                    }
+                    for q in plan.active_session.questions
+                ],
             }
             if plan.active_session
             else None
@@ -81,6 +93,7 @@ def to_document(plan: StudyPlan) -> Doc:
                 "notes_chars_total": c.notes_chars_total,
                 "last_recall_rating": int(c.last_recall_rating) if c.last_recall_rating else None,
                 "consolidated_at": c.consolidated_at,
+                "last_to_review": c.last_to_review,
                 "challenges": [
                     {
                         "id": ch.id.value,
@@ -117,7 +130,17 @@ def _v2_to_v3(doc: Doc) -> Doc:
     return doc
 
 
-UPCASTERS = {1: _v1_to_v2, 2: _v2_to_v3}
+def _v3_to_v4(doc: Doc) -> Doc:
+    """v4: teste de memória da revisão e o último "preciso revisar" de cada conteúdo."""
+    for content in doc["contents"]:
+        content.setdefault("last_to_review", None)
+    if doc.get("active_session"):
+        doc["active_session"].setdefault("questions", [])
+    doc["schema_version"] = 4
+    return doc
+
+
+UPCASTERS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4}
 
 
 def upcast(doc: Doc) -> Doc:
@@ -158,6 +181,7 @@ def from_document(doc: Doc) -> StudyPlan:
                     RecallRating(c["last_recall_rating"]) if c.get("last_recall_rating") else None
                 ),
                 consolidated_at=_opt_utc(c.get("consolidated_at")),
+                last_to_review=c["last_to_review"],
                 challenges=[
                     Challenge(
                         id=ChallengeId(ch["id"]),
@@ -173,7 +197,20 @@ def from_document(doc: Doc) -> StudyPlan:
             for c in doc["contents"]
         ],
         active_session=(
-            ActiveSession(ContentId(active["content_id"]), _utc(active["started_at"]))
+            ActiveSession(
+                ContentId(active["content_id"]),
+                _utc(active["started_at"]),
+                tuple(
+                    RecallQuestion(
+                        id=q["id"],
+                        text=q["text"],
+                        source=QuestionSource(q["source"]),
+                        template=q["template"],
+                        topic=q.get("topic"),
+                    )
+                    for q in active["questions"]
+                ),
+            )
             if active
             else None
         ),

@@ -14,6 +14,7 @@ from developer_myself.learning.domain.errors import (
     MasteryNotReachedError,
     NoActiveSessionError,
     RecallRatingRequiredError,
+    RecallTestRequiredError,
     SessionAlreadyActiveError,
 )
 from developer_myself.learning.domain.events import (
@@ -56,6 +57,8 @@ from developer_myself.learning.domain.value_objects import (
     LearnerId,
     MasteryLevel,
     Notes,
+    RecallAnswer,
+    RecallQuestion,
     RecallRating,
     SessionKind,
     StudyPreferences,
@@ -82,6 +85,34 @@ CHALLENGE_DESCRIPTION_MAX = 2_000
 class ActiveSession:
     content_id: ContentId
     started_at: datetime
+    questions: tuple[RecallQuestion, ...] = ()
+
+
+def _graded_test(
+    questions: tuple[RecallQuestion, ...], answers: tuple[RecallAnswer, ...]
+) -> tuple[dict[str, object], ...]:
+    """Junta perguntas e correções; sem uma correção para cada pergunta, recusa."""
+    if not questions:  # estudo ou revisão aberta antes do teste existir
+        return ()
+    by_id = {a.question_id: a for a in answers}
+    if len(answers) != len(questions) or set(by_id) != {q.id for q in questions}:
+        raise RecallTestRequiredError(
+            "Responda e corrija as 3 perguntas do teste antes de finalizar."
+        )
+    return tuple(
+        {
+            "question_id": q.id,
+            "text": q.text,
+            "source": q.source,
+            "template": q.template,
+            "topic": q.topic,
+            "position": position,
+            "answer": by_id[q.id].answer,
+            "grade": by_id[q.id].grade,
+            "useful": by_id[q.id].useful,
+        }
+        for position, q in enumerate(questions)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +248,9 @@ class StudyPlan:
         """Ocupa as vagas livres (ex.: depois que a política passou a permitir mais)."""
         return self._unlock_available(now)
 
-    def start_session(self, content_id: ContentId, now: datetime) -> SessionKind:
+    def start_session(
+        self, content_id: ContentId, now: datetime, questions: tuple[RecallQuestion, ...] = ()
+    ) -> SessionKind:
         self._expire_stale_session(now)
         if self.active_session is not None:
             raise SessionAlreadyActiveError("Já existe uma sessão em andamento. Finalize-a antes.")
@@ -225,7 +258,11 @@ class StudyPlan:
         kind = content.session_kind
         if kind is None:
             raise ContentLockedError(self.lock_reason(content))
-        self.active_session = ActiveSession(content_id=content_id, started_at=now)
+        self.active_session = ActiveSession(
+            content_id=content_id,
+            started_at=now,
+            questions=questions if kind is SessionKind.REVIEW else (),
+        )
         self._record(
             StudySessionStarted(
                 learner_id=self.id.value,
@@ -238,20 +275,25 @@ class StudyPlan:
         return kind
 
     def finish_session(
-        self, notes: Notes, now: datetime, recall: RecallRating | None = None
+        self,
+        notes: Notes,
+        now: datetime,
+        recall: RecallRating | None = None,
+        answers: tuple[RecallAnswer, ...] = (),
     ) -> SessionOutcome:
         session = self._require_active_session()
         content = self.content(session.content_id)
         kind = content.session_kind or SessionKind.STUDY
         duration = Duration.between(session.started_at, now)
+        # Expirada não pontua: abandona antes de exigir autoavaliação ou teste.
+        if self.is_expired(now):
+            return self._abandon_on_finish(content, kind, duration, now)
         if kind is SessionKind.REVIEW and recall is None:
             raise RecallRatingRequiredError(
                 "Diga quanto você lembrava antes desta revisão (1 a 4)."
             )
         rating = recall if kind is SessionKind.REVIEW else None
-
-        if self.is_expired(now):
-            return self._abandon_on_finish(content, kind, duration, now)
+        recall_test = _graded_test(session.questions, answers)
 
         level_before = self.level_of(content)
         today = self.timezone.local_date(now)
@@ -283,7 +325,7 @@ class StudyPlan:
         avg_notes_before = content.avg_notes_chars
         last_rating_before = int(content.last_recall_rating) if content.last_recall_rating else None
         self.active_session = None
-        content._register_session(now, kind, notes.char_count, rating)
+        content._register_session(now, kind, notes.char_count, rating, notes.to_review)
 
         if result.awarded:
             content._award_point()
@@ -336,6 +378,7 @@ class StudyPlan:
                 days_since_first_session=first_contact,
                 avg_notes_chars_before=avg_notes_before,
                 last_recall_rating_before=last_rating_before,
+                recall_test=recall_test,
             )
         )
         unlocked = self._on_level_change(content, level_before, now)
@@ -349,6 +392,14 @@ class StudyPlan:
             level=level_after,
             unlocked=unlocked,
         )
+
+    def backfill_last_to_review(self, content_id: ContentId, text: str) -> bool:
+        """Preenche o "preciso revisar" de quem ainda não tem (dados de antes do campo)."""
+        content = self.content(content_id)
+        if content.last_to_review is not None or not text.strip():
+            return False
+        content.last_to_review = text
+        return True
 
     def cancel_session(self, now: datetime) -> None:
         session = self._require_active_session()

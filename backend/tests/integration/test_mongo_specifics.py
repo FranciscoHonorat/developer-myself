@@ -95,7 +95,7 @@ async def test_v1_document_is_upcast_on_read_and_saved_as_current(
     await repo.save(plan)
     doc = await mongo_db.study_plans.find_one({"_id": learner})
     assert doc is not None
-    assert doc["schema_version"] == 3  # v1 -> v2 (contadores) -> v3 (preferências)
+    assert doc["schema_version"] == 4  # v1 -> v2 (contadores) -> v3 (preferências) -> v4
     assert doc["contents"][0]["review_count"] == 0
     assert doc["preferences"] == {"minutes_per_day": 210, "rest_days": []}
     assert plan.preferences.minutes_per_day == 210

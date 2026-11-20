@@ -10,6 +10,14 @@ from developer_myself.insights.application.history import HistoryQueries, Sessio
 from developer_myself.shared.adapters.http import LearnerIdDep
 
 
+class RecallItemOut(BaseModel):
+    text: str
+    source: str
+    answer: str
+    grade: str
+    useful: bool | None
+
+
 class SessionOut(BaseModel):
     event_id: str
     type: str
@@ -26,6 +34,7 @@ class SessionOut(BaseModel):
     notes_to_review: str
     level_after: str | None
     recall_rating: int | None = None
+    recall_test: list[RecallItemOut] = []
 
     @classmethod
     def of(cls, r: SessionRecord) -> SessionOut:
@@ -45,6 +54,16 @@ class SessionOut(BaseModel):
             notes_to_review=r.notes_to_review,
             level_after=r.level_after,
             recall_rating=r.recall_rating,
+            recall_test=[
+                RecallItemOut(
+                    text=i["text"],
+                    source=i["source"],
+                    answer=i["answer"],
+                    grade=i["grade"],
+                    useful=i["useful"],
+                )
+                for i in r.recall_test
+            ],
         )
 
 

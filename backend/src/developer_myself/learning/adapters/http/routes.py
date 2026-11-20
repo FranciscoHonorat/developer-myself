@@ -12,6 +12,9 @@ from developer_myself.learning.adapters.http.schemas import (
     ContentOut,
     FinishSessionIn,
     LevelOut,
+    NotebookIn,
+    NotebookOut,
+    NotebookSummaryOut,
     OutcomeOut,
     PlanOut,
     PreferencesIn,
@@ -23,7 +26,11 @@ from developer_myself.learning.adapters.http.schemas import (
     TimezoneIn,
     UnlockedOut,
 )
-from developer_myself.learning.application.use_cases import LearningUseCases, NotesInput
+from developer_myself.learning.application.use_cases import (
+    AnswerInput,
+    LearningUseCases,
+    NotesInput,
+)
 from developer_myself.shared.adapters.http import LearnerIdDep
 
 
@@ -124,7 +131,10 @@ async def finish_session(
     body: FinishSessionIn, learner_id: LearnerIdDep, uc: UseCases
 ) -> OutcomeOut:
     outcome = await uc.finish_session(
-        learner_id, NotesInput(body.studied, body.understood, body.to_review), body.recall_rating
+        learner_id,
+        NotesInput(body.studied, body.understood, body.to_review),
+        body.recall_rating,
+        [AnswerInput(a.question_id, a.answer, a.grade, a.useful) for a in body.answers],
     )
     return OutcomeOut.of(outcome)
 
@@ -132,3 +142,24 @@ async def finish_session(
 @router.post("/sessions/current/cancel", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_session(learner_id: LearnerIdDep, uc: UseCases) -> None:
     await uc.cancel_session(learner_id)
+
+
+# --------------------------------------------------------------------------- caderno
+@router.get("/contents/{content_id}/notebook")
+async def get_notebook(
+    content_id: uuid.UUID, learner_id: LearnerIdDep, uc: UseCases
+) -> NotebookOut:
+    return NotebookOut.of(await uc.notebooks.get(learner_id, content_id))
+
+
+@router.put("/contents/{content_id}/notebook")
+async def save_notebook(
+    content_id: uuid.UUID, body: NotebookIn, learner_id: LearnerIdDep, uc: UseCases
+) -> NotebookOut:
+    notebook = await uc.notebooks.save(learner_id, content_id, body.text, body.version)
+    return NotebookOut.of(notebook)
+
+
+@router.get("/notebooks")
+async def list_notebooks(learner_id: LearnerIdDep, uc: UseCases) -> list[NotebookSummaryOut]:
+    return [NotebookSummaryOut.of(n) for n in await uc.notebooks.list(learner_id)]

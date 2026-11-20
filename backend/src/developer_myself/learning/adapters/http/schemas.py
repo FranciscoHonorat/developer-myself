@@ -2,12 +2,15 @@
 
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from developer_myself.learning.domain.content import Challenge, Content
+from developer_myself.learning.domain.notebook import NOTEBOOK_MAX_CHARS, Notebook
 from developer_myself.learning.domain.study_plan import SESSION_EXPIRY, SessionOutcome, StudyPlan
 from developer_myself.learning.domain.value_objects import (
+    ANSWER_MAX_LENGTH,
     ContentKind,
     ContentStatus,
     MasteryLevel,
@@ -40,11 +43,19 @@ class StartSessionIn(_In):
     content_id: uuid.UUID
 
 
+class AnswerIn(_In):
+    question_id: uuid.UUID
+    answer: StrictStr = Field(default="", max_length=ANSWER_MAX_LENGTH)
+    grade: Literal["MISSED", "PARTIAL", "RECALLED"]
+    useful: bool | None = None
+
+
 class FinishSessionIn(_In):
     studied: StrictStr = Field(default="", max_length=10_000)
     understood: StrictStr = Field(default="", max_length=10_000)
     to_review: StrictStr = Field(default="", max_length=10_000)
     recall_rating: int | None = Field(default=None, ge=1, le=4, strict=True)
+    answers: list[AnswerIn] = Field(default_factory=list, max_length=10)
 
 
 class AddChallengeIn(_In):
@@ -54,6 +65,11 @@ class AddChallengeIn(_In):
 
 class SolveChallengeIn(_In):
     evidence: StrictStr = Field(max_length=10_000)
+
+
+class NotebookIn(_In):
+    text: StrictStr = Field(max_length=NOTEBOOK_MAX_CHARS)
+    version: int = Field(ge=0)
 
 
 class TimezoneIn(_In):
@@ -106,6 +122,7 @@ class ContentOut(BaseModel):
     queue_position: int | None
     lock_reason: str | None
     challenges: list[ChallengeOut]
+    last_to_review: str | None
 
     @classmethod
     def of(cls, plan: StudyPlan, c: Content) -> ContentOut:
@@ -140,7 +157,14 @@ class ContentOut(BaseModel):
             queue_position=position,
             lock_reason=plan.lock_reason(c) if c.status is ContentStatus.LOCKED else None,
             challenges=[ChallengeOut.of(ch) for ch in c.challenges],
+            last_to_review=c.last_to_review,
         )
+
+
+class QuestionOut(BaseModel):
+    id: uuid.UUID
+    text: str
+    source: str
 
 
 class ActiveSessionOut(BaseModel):
@@ -149,6 +173,8 @@ class ActiveSessionOut(BaseModel):
     kind: str | None
     started_at: datetime
     expires_at: datetime
+    questions: list[QuestionOut]
+    last_to_review: str | None
 
 
 class PreferencesOut(BaseModel):
@@ -179,6 +205,11 @@ class PlanOut(BaseModel):
                 kind=kind.value if kind else None,
                 started_at=plan.active_session.started_at,
                 expires_at=plan.active_session.started_at + SESSION_EXPIRY,
+                questions=[
+                    QuestionOut(id=q.id, text=q.text, source=q.source.value)
+                    for q in plan.active_session.questions
+                ],
+                last_to_review=content.last_to_review,
             )
         reviewed = plan.reviewed_today(now)
         return cls(
@@ -231,3 +262,33 @@ class LevelOut(BaseModel):
 
 class UnlockedOut(BaseModel):
     unlocked_content_id: uuid.UUID | None
+
+
+class NotebookOut(BaseModel):
+    content_id: uuid.UUID
+    text: str
+    version: int
+    updated_at: datetime | None
+
+    @classmethod
+    def of(cls, notebook: Notebook) -> NotebookOut:
+        return cls(
+            content_id=notebook.content_id.value,
+            text=notebook.text,
+            version=notebook.version,
+            updated_at=notebook.updated_at,
+        )
+
+
+class NotebookSummaryOut(BaseModel):
+    content_id: uuid.UUID
+    chars: int
+    updated_at: datetime | None
+
+    @classmethod
+    def of(cls, notebook: Notebook) -> NotebookSummaryOut:
+        return cls(
+            content_id=notebook.content_id.value,
+            chars=notebook.chars,
+            updated_at=notebook.updated_at,
+        )
