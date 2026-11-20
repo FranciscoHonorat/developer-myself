@@ -22,4 +22,8 @@ async def export(request: Request, learner_id: LearnerIdDep) -> dict[str, Any]:
         "account": {"id": str(me.id.value), "email": me.email.value, "created_at": me.created_at},
         "plan": PlanOut.of(plan, container.clock.now()).model_dump(mode="json"),
         "history": [SessionOut.of(r).model_dump(mode="json") for r in history],
+        "notebooks": [
+            {"content_id": str(n.content_id.value), "text": n.text, "updated_at": n.updated_at}
+            for n in await container.learning.notebooks.list(learner_id)
+        ],
     }

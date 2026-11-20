@@ -18,8 +18,15 @@ from pytest_bdd import given, parsers, then, when
 from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.insights.adapters.memory.store import InMemorySessionHistoryStore
 from developer_myself.insights.application.history import RecordSessionHistory
+from developer_myself.learning.adapters.memory.notebook_repository import (
+    InMemoryNotebookRepository,
+)
 from developer_myself.learning.adapters.memory.repository import InMemoryStudyPlanRepository
-from developer_myself.learning.application.use_cases import LearningUseCases, NotesInput
+from developer_myself.learning.application.use_cases import (
+    AnswerInput,
+    LearningUseCases,
+    NotesInput,
+)
 from developer_myself.learning.domain.content import Content
 from developer_myself.learning.domain.errors import (
     ChallengeAlreadySolvedError,
@@ -42,6 +49,7 @@ from developer_myself.learning.domain.value_objects import (
     RecallRating,
     SessionKind,
 )
+from developer_myself.review_questions import RuleQuestionPicker
 from developer_myself.shared.clock import FakeClock
 
 GOOD_NOTES = NotesInput(
@@ -77,6 +85,8 @@ class World:
     last_challenge_id: uuid.UUID | None = None
     session_kind: SessionKind | None = None
     history: InMemorySessionHistoryStore = field(default_factory=InMemorySessionHistoryStore)
+    notebooks: InMemoryNotebookRepository = field(default_factory=InMemoryNotebookRepository)
+    removed_ids: dict[str, uuid.UUID] = field(default_factory=dict)
     _uc: LearningUseCases | None = None
 
     def __post_init__(self) -> None:
@@ -88,7 +98,13 @@ class World:
     @property
     def uc(self) -> LearningUseCases:
         if self._uc is None:
-            self._uc = LearningUseCases.build(self.repository, self.clock, CatalogUnlockPolicy())
+            self._uc = LearningUseCases.build(
+                self.repository,
+                self.clock,
+                CatalogUnlockPolicy(),
+                notebooks=self.notebooks,
+                question_picker=RuleQuestionPicker(),
+            )
         return self._uc
 
     def run[T](self, coro: Coroutine[Any, Any, T]) -> T:
@@ -130,7 +146,15 @@ class World:
         self.session_kind = self.run(self.uc.start_session(self.learner_id, content.id.value))
         self.clock.advance(minutes=minutes)
         recall = rating if self.session_kind is SessionKind.REVIEW else None
-        self.outcome = self.run(self.uc.finish_session(self.learner_id, notes, recall))
+        self.outcome = self.run(
+            self.uc.finish_session(self.learner_id, notes, recall, self.answers("RECALLED"))
+        )
+
+    def answers(self, grade: str) -> list[AnswerInput]:
+        """Responde e corrige o teste de memória da sessão ativa (vazio se não houver)."""
+        session = self.plan().active_session
+        questions = session.questions if session is not None else ()
+        return [AnswerInput(q.id, "minha resposta", grade) for q in questions]
 
     def earn_points(self, title: str, amount: int) -> None:
         for _ in range(amount):
@@ -476,7 +500,7 @@ def then_rating_required(world: World) -> None:
     assert isinstance(world.error, RecallRatingRequiredError)
 
 
-def _last_finished(world: World) -> StudySessionFinished:
+def last_finished(world: World) -> StudySessionFinished:
     return next(e for e in reversed(world.repository.outbox) if isinstance(e, StudySessionFinished))
 
 
@@ -484,7 +508,7 @@ def _last_finished(world: World) -> StudySessionFinished:
     parsers.parse("o histórico registra a nota {rating:d} com {days:d} dias desde o último contato")
 )
 def then_label_recorded(world: World, rating: int, days: int) -> None:
-    event = _last_finished(world)
+    event = last_finished(world)
     assert event.recall_rating == rating
     assert event.last_contact_days is not None
     assert round(event.last_contact_days) == days
@@ -494,7 +518,7 @@ def then_label_recorded(world: World, rating: int, days: int) -> None:
 
 @then(parsers.re(r"a revisão conta como (?P<result>lembrada|esquecida)"))
 def then_remembered(world: World, result: str) -> None:
-    rating = _last_finished(world).recall_rating
+    rating = last_finished(world).recall_rating
     assert rating is not None
     assert RecallRating(rating).remembered is (result == "lembrada")
 
@@ -502,7 +526,9 @@ def then_remembered(world: World, result: str) -> None:
 # ================================================================== organizar a trilha
 @when(parsers.parse('eu removo "{title}"'))
 def when_remove(world: World, title: str) -> None:
-    world.run(world.uc.remove_content(world.learner_id, world.content(title).id.value))
+    content_id = world.content(title).id.value
+    world.run(world.uc.remove_content(world.learner_id, content_id))
+    world.removed_ids[title] = content_id
 
 
 @when(parsers.parse('eu tento remover "{title}"'))

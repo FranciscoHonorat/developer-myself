@@ -5,7 +5,7 @@ Recebe envelopes (dicionários) — nunca importa o modelo do `learning`.
 
 import uuid
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
@@ -40,6 +40,8 @@ class SessionRecord:
     days_since_first_session: float | None = None
     avg_notes_chars_before: float = 0.0
     last_recall_rating_before: int | None = None
+    # Teste de memória da revisão: pergunta, origem, resposta e correção (dataset da IA).
+    recall_test: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def is_labeled_review(self) -> bool:
@@ -81,6 +83,7 @@ class SessionRecord:
                 days_since_first_session=p.get("days_since_first_session"),
                 avg_notes_chars_before=p.get("avg_notes_chars_before", 0.0),
                 last_recall_rating_before=p.get("last_recall_rating_before"),
+                recall_test=p.get("recall_test", []),
             )
         occurred = datetime.fromisoformat(envelope["occurred_at"])
         return cls(
@@ -102,6 +105,29 @@ class SessionRecord:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class HistoryCursor:
+    """Posição da última sessão vista. Paginação por chave (keyset), não por offset:
+    uma sessão nova no topo não empurra itens para a página seguinte."""
+
+    finished_at: datetime
+    event_id: str
+
+    @classmethod
+    def of(cls, record: SessionRecord) -> HistoryCursor:
+        return cls(record.finished_at, record.event_id)
+
+    def is_after(self, record: SessionRecord) -> bool:
+        """`record` vem depois deste cursor na ordem decrescente."""
+        return (record.finished_at, record.event_id) < (self.finished_at, self.event_id)
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryPage:
+    items: list[SessionRecord]
+    next: HistoryCursor | None
+
+
 class SessionHistoryStore(Protocol):
     async def record(self, record: SessionRecord) -> bool:
         """Grava de forma idempotente (chave = event_id). Retorna False se já existia."""
@@ -110,6 +136,12 @@ class SessionHistoryStore(Protocol):
     async def list_for(
         self, learner_id: str, limit: int, since: datetime | None = None
     ) -> list[SessionRecord]: ...
+
+    async def page_for(
+        self, learner_id: str, limit: int, after: HistoryCursor | None = None
+    ) -> list[SessionRecord]:
+        """Mais recentes primeiro (`finished_at`, depois `event_id`), estritamente após `after`."""
+        ...
 
     async def delete_for(self, learner_id: str) -> None: ...
 
@@ -154,6 +186,15 @@ class HistoryQueries:
 
     async def recent(self, learner_id: uuid.UUID, limit: int = 50) -> list[SessionRecord]:
         return await self.store.list_for(str(learner_id), limit)
+
+    async def page(
+        self, learner_id: uuid.UUID, limit: int, after: HistoryCursor | None = None
+    ) -> HistoryPage:
+        # Busca um a mais só para saber se existe próxima página, sem contar o total.
+        found = await self.store.page_for(str(learner_id), limit + 1, after)
+        items = found[:limit]
+        has_more = len(found) > limit
+        return HistoryPage(items, HistoryCursor.of(items[-1]) if has_more else None)
 
     async def stats(
         self, learner_id: uuid.UUID, timezone: str, now: datetime, days: int = 30

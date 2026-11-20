@@ -1,9 +1,9 @@
 import type { WeekBlock } from "./types";
 
 export const BLOCK_LABEL: Record<WeekBlock["kind"], string> = {
-  REVIEW: "🔁 Revisão",
-  STUDY: "📖 Estudo",
-  CHALLENGE: "🎯 Desafio",
+  REVIEW: "Revisão",
+  STUDY: "Estudo",
+  CHALLENGE: "Desafio",
 };
 
 export const WEEKDAY_SHORT = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];

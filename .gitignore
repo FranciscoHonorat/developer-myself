@@ -7,3 +7,8 @@ __pycache__/
 .coverage
 htmlcov/
 node_modules/
+.deploy/
+.superpowers/
+
+# Documentos pessoais (ADRs, cronograma, PDFs): ficam só no disco
+Docs/

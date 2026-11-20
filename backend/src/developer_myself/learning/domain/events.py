@@ -87,6 +87,8 @@ class StudySessionFinished(DomainEvent):
     days_since_first_session: float | None = None
     avg_notes_chars_before: float = 0.0
     last_recall_rating_before: int | None = None
+    # Teste de memória da revisão (dataset da IA): um item por pergunta, na ordem.
+    recall_test: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

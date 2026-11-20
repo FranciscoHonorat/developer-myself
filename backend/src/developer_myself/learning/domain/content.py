@@ -64,6 +64,7 @@ class Content:
     notes_chars_total: int = 0
     last_recall_rating: RecallRating | None = None
     consolidated_at: datetime | None = None  # None = consolidado antes deste registro existir
+    last_to_review: str | None = None  # último "preciso revisar" não vazio
 
     # ------------------------------------------------------------------ consultas
     @property
@@ -123,9 +124,16 @@ class Content:
         self.points = self.points.add(1)
 
     def _register_session(
-        self, now: datetime, kind: SessionKind, notes_chars: int, rating: RecallRating | None
+        self,
+        now: datetime,
+        kind: SessionKind,
+        notes_chars: int,
+        rating: RecallRating | None,
+        to_review: str = "",
     ) -> None:
         self.last_session_at = now
+        if to_review.strip():
+            self.last_to_review = to_review
         self.first_session_at = self.first_session_at or now
         self.session_count += 1
         self.notes_chars_total += notes_chars

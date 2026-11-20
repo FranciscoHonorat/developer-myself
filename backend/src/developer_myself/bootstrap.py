@@ -20,7 +20,6 @@ from developer_myself import (
 from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.identity.adapters.argon2_hasher import Argon2PasswordHasher
 from developer_myself.identity.adapters.http import routes as identity_routes
-from developer_myself.identity.adapters.http.rate_limit import SlidingWindowLimiter
 from developer_myself.identity.adapters.memory.repositories import (
     InMemoryAuthSessionRepository,
     InMemoryUserRepository,
@@ -41,17 +40,27 @@ from developer_myself.insights.adapters.neural.recommender import load_best_reco
 from developer_myself.insights.adapters.neural.retrain import RetrainJob
 from developer_myself.insights.application.history import HistoryQueries, RecordSessionHistory
 from developer_myself.learning.adapters.http import routes as learning_routes
+from developer_myself.learning.adapters.memory.notebook_repository import (
+    InMemoryNotebookRepository,
+)
 from developer_myself.learning.adapters.memory.repository import InMemoryStudyPlanRepository
-from developer_myself.learning.application.use_cases import LearningUseCases, StudyPlanNotFoundError
+from developer_myself.learning.application.use_cases import LearningUseCases
 from developer_myself.learning.domain.errors import (
     ChallengeNotFoundError,
     ConcurrencyError,
     ContentNotFoundError,
     DomainError,
     InvalidValueError,
+    StudyPlanNotFoundError,
 )
 from developer_myself.learning.domain.value_objects import LearnerId
-from developer_myself.shared.adapters.http import RequestContextMiddleware
+from developer_myself.review_questions import RuleQuestionPicker
+from developer_myself.shared.adapters.http import (
+    RateLimitMiddleware,
+    RequestContextMiddleware,
+    rate_limit_rules,
+)
+from developer_myself.shared.adapters.rate_limit import SlidingWindowLimiter
 from developer_myself.shared.clock import Clock, SystemClock
 from developer_myself.shared.logging import configure_logging, log
 from developer_myself.shared.settings import Settings
@@ -85,6 +94,7 @@ def build_memory_container(
     store = InMemorySessionHistoryStore()
     record = RecordSessionHistory(store)
     plans = InMemoryStudyPlanRepository(subscribers=[record])
+    notebooks = InMemoryNotebookRepository()
     registry = InMemoryModelRegistry()
     identity = IdentityUseCases(
         InMemoryUserRepository(),
@@ -97,12 +107,17 @@ def build_memory_container(
     async def erase(learner_id: uuid.UUID) -> None:
         await plans.delete(LearnerId(learner_id))
         await store.delete_for(str(learner_id))
+        await notebooks.delete_all(LearnerId(learner_id))
 
     return Container(
         settings=settings,
         clock=clock,
         learning=LearningUseCases.build(
-            plans, clock, CatalogUnlockPolicy(settings.max_parallel_contents)
+            plans,
+            clock,
+            CatalogUnlockPolicy(settings.max_parallel_contents),
+            notebooks=notebooks,
+            question_picker=RuleQuestionPicker(),
         ),
         identity=identity,
         history=HistoryQueries(store),
@@ -188,6 +203,8 @@ def create_app(settings: Settings | None = None, container: Container | None = N
     if container is not None:  # testes sem lifespan
         app.state.container = container
         app.state.authenticate = _authenticator(container)
+    # O último adicionado é o mais externo: o 429 ainda ganha correlation id e cabeçalhos.
+    app.add_middleware(RateLimitMiddleware, rules=rate_limit_rules(settings))
     app.add_middleware(RequestContextMiddleware)
     _install_error_handlers(app)
 

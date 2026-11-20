@@ -43,7 +43,10 @@ def mongo_url() -> Iterator[str]:
                 "mongosh",
                 "--quiet",
                 "--eval",
-                "rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]})",
+                # rs.initiate volta antes da eleição: espera virar primário, senão o 1º
+                # teste que escreve falha com NotPrimaryError.
+                "rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]});"
+                "while (!db.hello().isWritablePrimary) { sleep(100); }",
             ]
         )
         host = container.get_container_host_ip()

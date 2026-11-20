@@ -116,6 +116,56 @@ class RecallRating(IntEnum):
         return self is not RecallRating.FORGOT
 
 
+class QuestionSource(StrEnum):
+    """De onde veio a pergunta do teste de memória (dado de treino da IA)."""
+
+    TO_REVIEW = "TO_REVIEW"
+    SPACED_TOPIC = "SPACED_TOPIC"
+    TOPIC = "TOPIC"
+    LEARNER = "LEARNER"  # reservada: perguntas escritas no caderno (etapa 2)
+
+
+class RecallGrade(StrEnum):
+    """Correção que o próprio aprendiz dá à resposta do teste."""
+
+    MISSED = "MISSED"  # Errei
+    PARTIAL = "PARTIAL"  # Parcial
+    RECALLED = "RECALLED"  # Acertei
+
+
+QUESTION_MAX_LENGTH = 500
+ANSWER_MAX_LENGTH = 5_000
+
+
+@dataclass(frozen=True, slots=True)
+class RecallQuestion:
+    id: uuid.UUID
+    text: str
+    source: QuestionSource
+    template: str
+    topic: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.text.strip():
+            raise InvalidValueError("A pergunta não pode ser vazia.")
+        if len(self.text) > QUESTION_MAX_LENGTH:
+            raise InvalidValueError(f"A pergunta aceita até {QUESTION_MAX_LENGTH} caracteres.")
+        if self.topic is not None and len(self.topic) > QUESTION_MAX_LENGTH:
+            raise InvalidValueError(f"O tópico aceita até {QUESTION_MAX_LENGTH} caracteres.")
+
+
+@dataclass(frozen=True, slots=True)
+class RecallAnswer:
+    question_id: uuid.UUID
+    answer: str
+    grade: RecallGrade
+    useful: bool | None = None
+
+    def __post_init__(self) -> None:
+        if len(self.answer) > ANSWER_MAX_LENGTH:
+            raise InvalidValueError(f"A resposta aceita até {ANSWER_MAX_LENGTH} caracteres.")
+
+
 class MasteryLevel(StrEnum):
     BEGINNER = "BEGINNER"
     INTERMEDIATE = "INTERMEDIATE"

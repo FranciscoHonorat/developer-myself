@@ -43,6 +43,31 @@ export interface Content {
   queue_position: number | null;
   lock_reason: string | null;
   challenges: Challenge[];
+  last_to_review: string | null;
+}
+
+export type QuestionSource = "TO_REVIEW" | "SPACED_TOPIC" | "TOPIC" | "LEARNER";
+export type RecallGrade = "MISSED" | "PARTIAL" | "RECALLED";
+
+export interface RecallQuestion {
+  id: string;
+  text: string;
+  source: QuestionSource;
+}
+
+export interface RecallAnswer {
+  question_id: string;
+  answer: string;
+  grade: RecallGrade;
+  useful: boolean | null;
+}
+
+export interface RecallItem {
+  text: string;
+  source: QuestionSource;
+  answer: string;
+  grade: RecallGrade;
+  useful: boolean | null;
 }
 
 export interface ActiveSession {
@@ -51,6 +76,8 @@ export interface ActiveSession {
   kind: SessionKind | null;
   started_at: string;
   expires_at: string;
+  questions: RecallQuestion[];
+  last_to_review: string | null;
 }
 
 export interface Plan {
@@ -76,6 +103,12 @@ export interface Outcome {
   unlocked_content_id: string | null;
 }
 
+/** Uma página do histórico. `next_cursor` é opaco: só devolvê-lo para pedir a próxima. */
+export interface HistoryPage {
+  items: SessionRecord[];
+  next_cursor: string | null;
+}
+
 export interface SessionRecord {
   event_id: string;
   type: "study_session_finished" | "study_session_abandoned";
@@ -92,6 +125,7 @@ export interface SessionRecord {
   notes_to_review: string;
   level_after: MasteryLevel | null;
   recall_rating: number | null;
+  recall_test?: RecallItem[];
 }
 
 export interface Stats {
@@ -114,6 +148,7 @@ export interface NotesInput {
   understood: string;
   to_review: string;
   recall_rating?: number;
+  answers?: RecallAnswer[];
 }
 
 export interface DayPlan {
@@ -224,4 +259,17 @@ export interface CompetencySheet {
   competencies: Competency[];
   effort: { area: string; points: number }[];
   rules: { grace_days: number; decay_per_day: number; floor: number };
+}
+
+export interface Notebook {
+  content_id: string;
+  text: string;
+  version: number;
+  updated_at: string | null;
+}
+
+export interface NotebookSummary {
+  content_id: string;
+  chars: number;
+  updated_at: string | null;
 }

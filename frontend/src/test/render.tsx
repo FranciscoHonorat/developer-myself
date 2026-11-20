@@ -1,13 +1,22 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
+import { vi } from "vitest";
 import type { Content } from "../api/types";
+import { TooltipProvider } from "../components/ui/tooltip";
 
 export function renderWithClient(ui: ReactElement) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  // `wrapper` (e não envolver `ui`) para o `rerender` continuar dentro do provider.
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>
+        <TooltipProvider>{children}</TooltipProvider>
+      </QueryClientProvider>
+    ),
+  });
 }
 
 export function jsonResponse(body: unknown, status = 200): Response {
@@ -37,6 +46,29 @@ export function makeContent(overrides: Partial<Content> = {}): Content {
     queue_position: null,
     lock_reason: null,
     challenges: [],
+    last_to_review: null,
     ...overrides,
   };
 }
+
+/**
+ * `fetch` roteado por caminho: cada chamada recebe um Response novo (o corpo só pode ser lido
+ * uma vez). Cadernos (`/notebook`) e o histórico paginado respondem vazios por padrão; o
+ * resto, `[]`.
+ */
+export function routeFetch(routes: Record<string, unknown> = {}) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const path = String(input);
+    const match = Object.keys(routes).find((p) => path.endsWith(p));
+    if (match !== undefined) return jsonResponse(routes[match]);
+    if (path.includes("/history?")) return jsonResponse({ items: [], next_cursor: null });
+    if (path.endsWith("/notebook")) {
+      const contentId = path.split("/").at(-2) ?? "";
+      return jsonResponse({ content_id: contentId, text: "", version: 0, updated_at: null });
+    }
+    return jsonResponse([]);
+  });
+}
+
+export const callTo = (fetchMock: ReturnType<typeof routeFetch>, path: string) =>
+  fetchMock.mock.calls.find(([input]) => String(input).endsWith(path));

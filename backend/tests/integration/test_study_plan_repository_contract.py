@@ -9,7 +9,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 from tests.integration.conftest import requires_docker
 
 from developer_myself.learning.adapters.memory.repository import InMemoryStudyPlanRepository
-from developer_myself.learning.adapters.mongo.repository import MongoStudyPlanRepository
+from developer_myself.learning.adapters.mongo.repository import MongoStudyPlanRepository, upcast
 from developer_myself.learning.domain.errors import ConcurrencyError
 from developer_myself.learning.domain.repository import StudyPlanRepository
 from developer_myself.learning.domain.study_plan import StudyPlan
@@ -21,6 +21,8 @@ from developer_myself.learning.domain.value_objects import (
     LearnerId,
     MasteryLevel,
     Notes,
+    QuestionSource,
+    RecallQuestion,
     Timezone,
     Title,
 )
@@ -58,6 +60,55 @@ def rich_plan() -> StudyPlan:
     plan.add_challenge(a.id, ChallengeId.new(), "Outro", MasteryLevel.ADVANCED, NOW)
     plan.start_session(a.id, NOW + timedelta(hours=1))
     return plan
+
+
+def review_plan() -> StudyPlan:
+    """Revisão ativa com teste de memória e um "preciso revisar" guardado."""
+    plan = StudyPlan.create(LearnerId.new(), Timezone("America/Sao_Paulo"))
+    a = plan.add_content(ContentId.new(), Title("Clean Code"), ContentKind.BOOK, NOW)
+    plan.start_session(a.id, NOW)
+    plan.finish_session(Notes("a", "b", "CQS\n- nomes"), NOW + timedelta(minutes=30))
+    a._consolidate(NOW)
+    questions = (
+        RecallQuestion(uuid.uuid7(), "Explique sem consultar: CQS", QuestionSource.TO_REVIEW,
+                       "explain_to_review", "CQS"),
+        RecallQuestion(uuid.uuid7(), "O que você lembra de nomes?", QuestionSource.SPACED_TOPIC,
+                       "recall_topic", "nomes"),
+        RecallQuestion(uuid.uuid7(), "Explique funções para quem está começando.",
+                       QuestionSource.TOPIC, "teach_beginner", None),
+    )  # fmt: skip
+    plan.start_session(a.id, NOW + timedelta(days=1), questions)
+    return plan
+
+
+async def test_roundtrip_preserves_the_recall_test(repository: StudyPlanRepository) -> None:
+    plan = review_plan()
+    await repository.save(plan)
+    loaded = await repository.get(plan.id)
+    assert loaded is not None
+    assert loaded.active_session == plan.active_session
+    assert loaded.active_session is not None
+    assert len(loaded.active_session.questions) == 3
+    assert loaded.contents[0].last_to_review == "CQS\n- nomes"
+    assert loaded.contents == plan.contents
+
+
+def test_upcast_v3_to_v4() -> None:
+    doc = {
+        "schema_version": 3,
+        "active_session": {"content_id": uuid.uuid4(), "started_at": NOW},
+        "contents": [{"id": uuid.uuid4()}, {"id": uuid.uuid4()}],
+    }
+    out = upcast(doc)
+    assert out["schema_version"] == 4
+    assert out["active_session"]["questions"] == []
+    assert [c["last_to_review"] for c in out["contents"]] == [None, None]
+
+
+def test_upcast_v3_to_v4_without_active_session() -> None:
+    out = upcast({"schema_version": 3, "active_session": None, "contents": []})
+    assert out["schema_version"] == 4
+    assert out["active_session"] is None
 
 
 async def test_get_missing_returns_none(repository: StudyPlanRepository) -> None:

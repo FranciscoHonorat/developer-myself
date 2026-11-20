@@ -53,5 +53,17 @@ class RecallRatingRequiredError(InvalidValueError):
     """Toda revisão precisa da autoavaliação (rótulo real para a rede neural)."""
 
 
+class RecallTestRequiredError(InvalidValueError):
+    """Revisão com teste de memória só finaliza com as perguntas respondidas e corrigidas."""
+
+
 class ContentHasProgressError(DomainError):
     """Remover apagaria histórico de pontos, sessões ou desafios: não é permitido."""
+
+
+class NotebookConflictError(DomainError):
+    """O caderno mudou desde que foi aberto (outra aba)."""
+
+
+class StudyPlanNotFoundError(DomainError):
+    pass

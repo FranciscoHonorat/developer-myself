@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from developer_myself.insights.application.history import SessionRecord
+from developer_myself.insights.application.history import HistoryCursor, SessionRecord
 
 
 @dataclass(slots=True)
@@ -23,6 +23,16 @@ class InMemorySessionHistoryStore:
             if r.learner_id == learner_id and (since is None or r.finished_at >= since)
         ]
         return sorted(found, key=lambda r: r.finished_at, reverse=True)[:limit]
+
+    async def page_for(
+        self, learner_id: str, limit: int, after: HistoryCursor | None = None
+    ) -> list[SessionRecord]:
+        found = [
+            r
+            for r in self._records.values()
+            if r.learner_id == learner_id and (after is None or after.is_after(r))
+        ]
+        return sorted(found, key=lambda r: (r.finished_at, r.event_id), reverse=True)[:limit]
 
     async def delete_for(self, learner_id: str) -> None:
         for key in [k for k, r in self._records.items() if r.learner_id == learner_id]:

@@ -1,4 +1,4 @@
-import type { ContentKind, ContentStatus, MasteryLevel, SessionKind } from "./types";
+import type { ContentKind, ContentStatus, MasteryLevel, RecallGrade, SessionKind } from "./types";
 
 export const LEVEL_LABEL: Record<MasteryLevel, string> = {
   BEGINNER: "Iniciante",
@@ -56,3 +56,10 @@ export function formatDuration(totalSeconds: number): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 }
+
+/** Correção que o aprendiz dá à própria resposta no teste de memória. */
+export const GRADE_LABEL: Record<RecallGrade, string> = {
+  MISSED: "Errei",
+  PARTIAL: "Parcial",
+  RECALLED: "Acertei",
+};

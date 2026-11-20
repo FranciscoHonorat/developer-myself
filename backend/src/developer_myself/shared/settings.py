@@ -25,6 +25,13 @@ class Settings(BaseSettings):
 
     relay_interval_seconds: float = 1.0
 
+    # Rate limit por IP em /api/* (ADR-0009). 0 desliga a regra.
+    # Escritas: o caderno salva sozinho a cada ~1 s parado, então 120/min deixa folga.
+    rate_limit_reads_per_minute: int = 600
+    rate_limit_writes_per_minute: int = 120
+    rate_limit_registers_per_hour: int = 5
+    rate_limit_exports_per_minute: int = 5
+
     # Trilha: quantos conteúdos podem estar em andamento ao mesmo tempo (ADR-0002, I1)
     max_parallel_contents: int = 3
 

@@ -1,12 +1,23 @@
 # Cada job chama `make` — os mesmos comandos de quem desenvolve (ADR-0007, ADR-0010).
+# CI em todo PR e push na master; CD (job `publish`) só depois de tudo verde na master.
 name: ci
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [master]
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+# Um push novo cancela o pipeline anterior do mesmo ref — exceto na master,
+# onde cada commit precisa terminar para gerar sua imagem.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+env:
+  IMAGE: ghcr.io/franciscohonorat/developer-myself
 
 jobs:
   lint-typecheck:
@@ -61,10 +72,82 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: docker build -t developer-myself:${{ github.sha }} .
-      - uses: aquasecurity/trivy-action@0.33.1
+      - uses: docker/setup-buildx-action@v3
+      - id: meta
+        uses: docker/metadata-action@v5
         with:
-          image-ref: developer-myself:${{ github.sha }}
+          images: ${{ env.IMAGE }}
+      # A imagem vira um arquivo: o Trivy escaneia ESTE arquivo e o publish empurra o mesmo,
+      # sem rebuild (cache GHA evictado ou base nova não geram uma imagem não escaneada).
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          tags: developer-myself:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=docker,dest=${{ runner.temp }}/image.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Fixado por SHA (v0.36.0): as tags antigas sem "v" foram removidas do repositório.
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          input: ${{ runner.temp }}/image.tar
           severity: CRITICAL,HIGH
           exit-code: "1"
           ignore-unfixed: true
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        with:
+          name: image
+          path: ${{ runner.temp }}/image.tar
+          retention-days: 1
+
+  # ---------- CD: entrega contínua no GitHub Container Registry (ADR-0010)
+  # Só roda em push na master, depois de lint, testes, integração, e2e, segurança e Trivy.
+  # Publica exatamente a imagem que o Trivy escaneou (artefato do build-image).
+  publish:
+    needs: build-image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write       # push no ghcr.io
+      id-token: write       # assinatura OIDC da atestação
+      attestations: write   # proveniência (SLSA) ligada ao digest
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/pkgs/container/developer-myself
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: image
+          path: ${{ runner.temp }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: push
+        name: Push da imagem escaneada
+        run: |
+          docker load --input "$RUNNER_TEMP/image.tar"
+          for tag in "$GITHUB_SHA" latest; do
+            docker tag "developer-myself:$GITHUB_SHA" "$IMAGE:$tag"
+            docker push --quiet "$IMAGE:$tag"
+          done
+          digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$GITHUB_SHA")
+          echo "digest=${digest#*@}" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Resumo
+        run: |
+          {
+            echo "### Imagem publicada"
+            echo '```'
+            echo "${IMAGE}:${GITHUB_SHA}"
+            echo "${IMAGE}@${{ steps.push.outputs.digest }}"
+            echo '```'
+            echo "Atualize a máquina com \`make deploy\` (ou \`make deploy TAG=<sha>\` para fixar/voltar versão)."
+          } >> "$GITHUB_STEP_SUMMARY"
