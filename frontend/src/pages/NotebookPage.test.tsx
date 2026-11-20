@@ -122,4 +122,36 @@ describe("NotebookPage", () => {
     expect(router.state.location.pathname).toBe("/caderno");
     expect(await screen.findByRole("navigation", { name: "Matérias" })).toBeInTheDocument();
   });
+
+  describe("paginação das matérias", () => {
+    const many = plan(
+      Array.from({ length: 12 }, (_, i) =>
+        makeContent({ id: `c${i + 1}`, title: `Matéria ${i + 1}` }),
+      ),
+    );
+    const subjects = () =>
+      screen
+        .getAllByRole("link")
+        .filter((a) => a.closest("nav[aria-label='Matérias']"))
+        .map((a) => a.querySelector("strong")?.textContent);
+
+    it("mostra 10 por página e navega", async () => {
+      routeFetch({ "/plan": many });
+      const router = renderAt("/caderno");
+      expect(await screen.findByText("Matéria 1")).toBeInTheDocument();
+      expect(subjects()).toHaveLength(10);
+      await userEvent.click(screen.getByRole("button", { name: "Próxima" }));
+      expect(subjects()).toEqual(["Matéria 11", "Matéria 12"]);
+      expect(router.state.location.search).toBe("?pagina=2");
+    });
+
+    it("abrir o caderno de uma matéria mostra a página onde ela está", async () => {
+      routeFetch({ "/plan": many });
+      renderAt("/caderno/c12");
+      expect(await screen.findByRole("link", { current: "page" })).toHaveTextContent("Matéria 12");
+      expect(screen.getByRole("navigation", { name: "Páginas de Matérias" })).toHaveTextContent(
+        "Página 2 de 2",
+      );
+    });
+  });
 });

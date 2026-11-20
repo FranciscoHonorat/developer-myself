@@ -4,10 +4,16 @@ import { useNotebooks, usePlan } from "@/api/hooks";
 import { STATUS_LABEL } from "@/api/labels";
 import { recallTestOn } from "@/api/recall";
 import { ErrorState } from "@/components/ErrorState";
+import { Pagination } from "@/components/Pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotebookEditor } from "@/features/notebook/NotebookEditor";
+import { pageContaining, paginate } from "@/lib/paginate";
 import { MOBILE_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
+import { usePageParam } from "@/lib/usePageParam";
 import { cn } from "@/lib/utils";
+
+/** Matérias por página na lista lateral. */
+export const NOTEBOOK_PAGE_SIZE = 10;
 
 /** Caderno: matérias à esquerda, o caderno da escolhida (pela URL) à direita. */
 export function NotebookPage() {
@@ -15,10 +21,17 @@ export function NotebookPage() {
   const summaries = useNotebooks();
   const { contentId } = useParams();
   const isMobile = useMediaQuery(MOBILE_QUERY);
+  const [requestedPage, setPage] = usePageParam("pagina");
 
   const contents = plan.data?.contents ?? [];
   const byContent = new Map((summaries.data ?? []).map((s) => [s.content_id, s]));
   const current = contents.find((c) => c.id === contentId);
+  // Sem `?pagina=`, abre na página da matéria escolhida (link direto, F5 em /caderno/:id).
+  const page = paginate(
+    contents,
+    requestedPage ?? pageContaining(contents, (c) => c.id === contentId, NOTEBOOK_PAGE_SIZE) ?? 1,
+    NOTEBOOK_PAGE_SIZE,
+  );
 
   if (plan.isPending) {
     return (
@@ -51,36 +64,44 @@ export function NotebookPage() {
       <h1 className="text-2xl font-semibold tracking-tight">Caderno</h1>
       <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
         {showList && (
-          <nav aria-label="Matérias" className="rounded-xl border bg-card p-2">
-            <ul className="flex flex-col gap-1">
-              {contents.map((c) => {
-                const summary = byContent.get(c.id);
-                const active = c.id === contentId;
-                return (
-                  <li key={c.id}>
-                    <Link
-                      to={`/caderno/${c.id}`}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "flex flex-col gap-0.5 rounded-lg px-3 py-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
-                        active && "bg-accent text-accent-foreground hover:bg-accent",
-                      )}
-                    >
-                      <strong className="truncate text-sm font-medium">{c.title}</strong>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {summary && summary.chars > 0
-                          ? `${summary.chars.toLocaleString("pt-BR")} caracteres` +
-                            (summary.updated_at
-                              ? ` · ${new Date(summary.updated_at).toLocaleDateString("pt-BR")}`
-                              : "")
-                          : STATUS_LABEL[c.status]}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+          <div className="flex flex-col gap-3">
+            <nav aria-label="Matérias" className="rounded-xl border bg-card p-2">
+              <ul className="flex flex-col gap-1">
+                {page.items.map((c) => {
+                  const summary = byContent.get(c.id);
+                  const active = c.id === contentId;
+                  return (
+                    <li key={c.id}>
+                      <Link
+                        to={`/caderno/${c.id}`}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "flex flex-col gap-0.5 rounded-lg px-3 py-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+                          active && "bg-accent text-accent-foreground hover:bg-accent",
+                        )}
+                      >
+                        <strong className="truncate text-sm font-medium">{c.title}</strong>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {summary && summary.chars > 0
+                            ? `${summary.chars.toLocaleString("pt-BR")} caracteres` +
+                              (summary.updated_at
+                                ? ` · ${new Date(summary.updated_at).toLocaleDateString("pt-BR")}`
+                                : "")
+                            : STATUS_LABEL[c.status]}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+            <Pagination
+              page={page.page}
+              totalPages={page.totalPages}
+              onChange={setPage}
+              label="Matérias"
+            />
+          </div>
         )}
         {showEditor && (
           <section className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:p-5">
