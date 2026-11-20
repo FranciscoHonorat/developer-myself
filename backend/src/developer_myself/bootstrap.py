@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from developer_myself import (
     account_routes,
+    admin_routes,
     competency_routes,
     recommendation_routes,
     schedule_routes,
@@ -22,15 +23,21 @@ from developer_myself.identity.adapters.argon2_hasher import Argon2PasswordHashe
 from developer_myself.identity.adapters.http import routes as identity_routes
 from developer_myself.identity.adapters.memory.repositories import (
     InMemoryAuthSessionRepository,
+    InMemoryRegistrationGate,
     InMemoryUserRepository,
 )
 from developer_myself.identity.application.ports import PasswordHasher
 from developer_myself.identity.application.use_cases import IdentityUseCases
 from developer_myself.identity.domain.model import (
+    CannotDeleteSelfError,
     EmailAlreadyRegisteredError,
     IdentityError,
     InvalidCredentialsError,
+    NotAdminError,
     NotAuthenticatedError,
+    RegistrationClosedError,
+    UserNotFoundError,
+    parse_admin_emails,
 )
 from developer_myself.insights.adapters import http_routes as insights_routes
 from developer_myself.insights.adapters.memory.model_registry import InMemoryModelRegistry
@@ -102,6 +109,8 @@ def build_memory_container(
         hasher or Argon2PasswordHasher(),
         clock,
         timedelta(days=settings.session_ttl_days),
+        registration=InMemoryRegistrationGate(),
+        admin_emails=parse_admin_emails(settings.admin_emails),
     )
 
     async def erase(learner_id: uuid.UUID) -> None:
@@ -147,6 +156,14 @@ def _error(status_code: int, exc: Exception) -> JSONResponse:
     return JSONResponse({"detail": str(exc), "code": type(exc).__name__}, status_code=status_code)
 
 
+ADMIN_ERRORS: dict[type[IdentityError], tuple[int, str]] = {
+    NotAdminError: (403, "FORBIDDEN"),
+    RegistrationClosedError: (403, "REGISTRATION_CLOSED"),
+    CannotDeleteSelfError: (409, "CANNOT_DELETE_SELF"),
+    UserNotFoundError: (404, "NOT_FOUND"),
+}
+
+
 def _install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
@@ -165,6 +182,10 @@ def _install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(IdentityError)
     async def identity_error(_: Request, exc: IdentityError) -> JSONResponse:
+        # Erros da área admin têm `code` estável: o frontend decide a mensagem por ele.
+        for kind, (status_code, code) in ADMIN_ERRORS.items():
+            if isinstance(exc, kind):
+                return JSONResponse({"detail": str(exc), "code": code}, status_code=status_code)
         if isinstance(exc, InvalidCredentialsError | NotAuthenticatedError):
             return _error(401, exc)
         if isinstance(exc, EmailAlreadyRegisteredError):
@@ -192,6 +213,9 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         app.state.container = built
         app.state.authenticate = _authenticator(built)
         log.info("api_started", storage=settings.storage)
+        if missing := await built.identity.admin_emails_without_account():
+            # Sem o e-mail no log: só quantos. Quem cadastrar esse e-mail primeiro vira admin.
+            log.warning("admin_email_without_account", count=missing)
         try:
             yield
         finally:
@@ -210,6 +234,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
 
     for module in (
         identity_routes,
+        admin_routes,
         learning_routes,
         insights_routes,
         account_routes,

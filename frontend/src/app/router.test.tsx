@@ -116,6 +116,12 @@ describe("rotas e casca", () => {
     expect(router.state.location.pathname).toBe("/hoje");
   });
 
+  it("/admin sem ser admin volta para o Hoje", async () => {
+    fakeApi({ loggedIn: true });
+    const router = renderAt("/admin");
+    await waitFor(() => expect(router.state.location.pathname).toBe("/hoje"));
+  });
+
   it("F5 em /progresso?aba=historico abre o histórico", async () => {
     fakeApi({ loggedIn: true });
     renderAt("/progresso?aba=historico");

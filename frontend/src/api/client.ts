@@ -1,5 +1,6 @@
 // `api/` é o port do frontend: componentes NUNCA chamam fetch direto (ADR-0011).
 import type {
+  AdminAccountsPage,
   Challenge,
   CompetencySheet,
   Content,
@@ -14,6 +15,7 @@ import type {
   Outcome,
   Plan,
   Recommendations,
+  Registration,
   SessionKind,
   Stats,
   Today,
@@ -122,4 +124,14 @@ export const api = {
     return request<Notebook>("PUT", `/contents/${contentId}/notebook`, body, { keepalive });
   },
   notebooks: () => request<NotebookSummary[]>("GET", "/notebooks"),
+
+  registrationStatus: () => request<Registration>("GET", "/auth/registration"),
+  adminAccounts: (cursor: string | null = null, limit = 20) =>
+    request<AdminAccountsPage>(
+      "GET",
+      `/admin/accounts?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
+  adminDeleteAccount: (id: string) => request<void>("DELETE", `/admin/accounts/${id}`),
+  adminRegistration: () => request<Registration>("GET", "/admin/registration"),
+  setRegistration: (open: boolean) => request<Registration>("PUT", "/admin/registration", { open }),
 };

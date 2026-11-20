@@ -33,6 +33,11 @@ class MeOut(BaseModel):
     id: uuid.UUID
     email: str
     created_at: datetime
+    is_admin: bool = False
+
+
+class RegistrationOut(BaseModel):
+    open: bool
 
 
 def get_identity(request: Request) -> IdentityUseCases:
@@ -94,7 +99,18 @@ async def logout(request: Request, response: Response, uc: Identity) -> None:
 @router.get("/me")
 async def me(learner_id: LearnerIdDep, uc: Identity) -> MeOut:
     user = await uc.me(UserId(learner_id))
-    return MeOut(id=user.id.value, email=user.email.value, created_at=user.created_at)
+    return MeOut(
+        id=user.id.value,
+        email=user.email.value,
+        created_at=user.created_at,
+        is_admin=user.email in uc.admin_emails,
+    )
+
+
+@router.get("/registration")
+async def registration_status(uc: Identity) -> RegistrationOut:
+    """Público: `/cadastro` avisa antes de a pessoa preencher o formulário."""
+    return RegistrationOut(open=await uc.registration_open())
 
 
 EraseData = Callable[[uuid.UUID], Awaitable[None]]

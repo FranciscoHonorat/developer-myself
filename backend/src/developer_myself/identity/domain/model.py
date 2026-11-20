@@ -35,6 +35,26 @@ class NotAuthenticatedError(IdentityError):
     pass
 
 
+class NotAdminError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Você não tem acesso à área de admin.")
+
+
+class RegistrationClosedError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Novos cadastros estão fechados no momento.")
+
+
+class CannotDeleteSelfError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Para excluir a própria conta, use a página Conta.")
+
+
+class UserNotFoundError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Conta não encontrada.")
+
+
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 EMAIL_MAX = 254
 PASSWORD_MIN = 10
@@ -61,6 +81,12 @@ class Email:
         object.__setattr__(self, "value", normalized)
 
 
+def parse_admin_emails(raw: str) -> frozenset[Email]:
+    """`DM_ADMIN_EMAILS`: e-mails separados por vírgula. Itens vazios são ignorados;
+    um e-mail inválido derruba o boot (melhor que um admin silenciosamente ausente)."""
+    return frozenset(Email(item) for item in raw.split(",") if item.strip())
+
+
 def validate_password(password: str) -> None:
     if len(password) < PASSWORD_MIN:
         raise WeakPasswordError(f"A senha precisa ter pelo menos {PASSWORD_MIN} caracteres.")
@@ -74,6 +100,21 @@ class User:
     email: Email
     password_hash: str
     created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class UserCursor:
+    """Última conta vista na listagem do admin. Keyset: (created_at, id), decrescente."""
+
+    created_at: datetime
+    user_id: uuid.UUID
+
+    @classmethod
+    def of(cls, user: User) -> UserCursor:
+        return cls(user.created_at, user.id.value)
+
+    def is_after(self, user: User) -> bool:
+        return (user.created_at, user.id.value) < (self.created_at, self.user_id)
 
 
 @dataclass(frozen=True, slots=True)

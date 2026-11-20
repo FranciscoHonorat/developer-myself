@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from developer_myself.identity.domain.model import AuthSession, Email, User, UserId
+from developer_myself.identity.domain.model import AuthSession, Email, User, UserCursor, UserId
 
 
 class UserRepository(Protocol):
@@ -13,6 +13,10 @@ class UserRepository(Protocol):
     async def get(self, user_id: UserId) -> User | None: ...
 
     async def delete(self, user_id: UserId) -> None: ...
+
+    async def page(self, limit: int, after: UserCursor | None = None) -> list[User]:
+        """Mais recentes primeiro (`created_at`, depois id), estritamente após `after`."""
+        ...
 
 
 class AuthSessionRepository(Protocol):
@@ -29,3 +33,11 @@ class PasswordHasher(Protocol):
     async def hash(self, password: str) -> str: ...
 
     async def verify(self, password_hash: str, password: str) -> bool: ...
+
+
+class RegistrationGate(Protocol):
+    """Se novas contas podem ser criadas. Persistente: sobrevive a reinícios."""
+
+    async def is_open(self) -> bool: ...
+
+    async def set_open(self, open: bool) -> None: ...

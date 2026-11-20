@@ -9,6 +9,7 @@ from developer_myself.identity.domain.model import (
     Email,
     EmailAlreadyRegisteredError,
     User,
+    UserCursor,
     UserId,
 )
 
@@ -53,6 +54,16 @@ class MongoUserRepository:
     async def delete(self, user_id: UserId) -> None:
         await self._col.delete_one({"_id": user_id.value})
 
+    async def page(self, limit: int, after: UserCursor | None = None) -> list[User]:
+        query: Doc = {}
+        if after is not None:
+            query["$or"] = [
+                {"created_at": {"$lt": after.created_at}},
+                {"created_at": after.created_at, "_id": {"$lt": after.user_id}},
+            ]
+        cursor = self._col.find(query).sort([("created_at", -1), ("_id", -1)]).limit(limit)
+        return [_user(doc) async for doc in cursor]
+
 
 class MongoAuthSessionRepository:
     def __init__(self, collection: AsyncCollection[Doc]) -> None:
@@ -84,3 +95,19 @@ class MongoAuthSessionRepository:
 
     async def delete_all_for(self, user_id: UserId) -> None:
         await self._col.delete_many({"user_id": user_id.value})
+
+
+class MongoRegistrationGate:
+    """Documento único `{_id: "registration", open: bool}` em `app_settings`; ausente = aberto."""
+
+    _ID = "registration"
+
+    def __init__(self, collection: AsyncCollection[Doc]) -> None:
+        self._col = collection
+
+    async def is_open(self) -> bool:
+        doc = await self._col.find_one({"_id": self._ID})
+        return True if doc is None else bool(doc["open"])
+
+    async def set_open(self, open: bool) -> None:
+        await self._col.update_one({"_id": self._ID}, {"$set": {"open": open}}, upsert=True)

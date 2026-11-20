@@ -8,9 +8,11 @@ from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.identity.adapters.argon2_hasher import Argon2PasswordHasher
 from developer_myself.identity.adapters.mongo.repositories import (
     MongoAuthSessionRepository,
+    MongoRegistrationGate,
     MongoUserRepository,
 )
 from developer_myself.identity.application.use_cases import IdentityUseCases
+from developer_myself.identity.domain.model import parse_admin_emails
 from developer_myself.insights.adapters.mongo.model_registry import MongoModelRegistry
 from developer_myself.insights.adapters.mongo.store import MongoSessionHistoryStore
 from developer_myself.insights.adapters.neural.provider import RecommenderProvider
@@ -67,6 +69,8 @@ async def build_mongo_container(settings: Settings, clock: Clock | None = None) 
             Argon2PasswordHasher(),
             clock,
             timedelta(days=settings.session_ttl_days),
+            registration=MongoRegistrationGate(db.app_settings),
+            admin_emails=parse_admin_emails(settings.admin_emails),
         ),
         history=HistoryQueries(store),
         record_history=RecordSessionHistory(store),

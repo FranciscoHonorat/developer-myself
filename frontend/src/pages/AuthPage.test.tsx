@@ -7,9 +7,10 @@ import { AuthPage } from "./AuthPage";
 
 afterEach(() => vi.restoreAllMocks());
 
-function renderAt(path: "/entrar" | "/cadastro") {
+function renderAt(path: "/entrar" | "/cadastro", registrationOpen = true) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const p = String(input);
+    if (p.endsWith("/auth/registration")) return jsonResponse({ open: registrationOpen });
     if (p.endsWith("/auth/login"))
       return jsonResponse(
         { detail: "E-mail ou senha incorretos.", code: "InvalidCredentialsError" },
@@ -53,5 +54,19 @@ describe("AuthPage", () => {
     await user.type(screen.getByLabelText("Senha"), "errada-123456");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("E-mail ou senha incorretos.");
+  });
+
+  it("/cadastro avisa quando o cadastro está fechado, sem esconder o formulário", async () => {
+    renderAt("/cadastro", false);
+    expect(
+      await screen.findByText("Novos cadastros estão fechados no momento."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Criar conta" })).toBeInTheDocument();
+  });
+
+  it("/cadastro aberto não mostra aviso", async () => {
+    renderAt("/cadastro", true);
+    await screen.findByRole("button", { name: "Criar conta" });
+    expect(screen.queryByText(/cadastros estão fechados/)).not.toBeInTheDocument();
   });
 });

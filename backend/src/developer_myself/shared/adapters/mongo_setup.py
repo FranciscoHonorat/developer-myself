@@ -120,6 +120,7 @@ async def ensure_schema(db: AsyncDatabase[Doc]) -> None:
     await _ensure_collection(db, "study_sessions", STUDY_SESSION_SCHEMA)
     await _ensure_collection(db, "processed_events", {"bsonType": "object"})
     await _ensure_collection(db, "notebooks", NOTEBOOK_SCHEMA)
+    await _ensure_collection(db, "app_settings", {"bsonType": "object"})
 
     await db.study_plans.create_indexes(
         [
@@ -131,7 +132,11 @@ async def ensure_schema(db: AsyncDatabase[Doc]) -> None:
         ]
     )
     await db.users.create_indexes(
-        [IndexModel([("email", ASCENDING)], unique=True, name="email_unique")]
+        [
+            IndexModel([("email", ASCENDING)], unique=True, name="email_unique"),
+            # Listagem do admin: mais recentes primeiro, com desempate pelo id.
+            IndexModel([("created_at", DESCENDING), ("_id", DESCENDING)], name="by_created"),
+        ]
     )
     await db.auth_sessions.create_indexes(
         [

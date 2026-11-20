@@ -2,7 +2,7 @@ import { Brain, Repeat, Timer } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, type Location, Navigate, useLocation } from "react-router";
 import { ApiError, api } from "@/api/client";
-import { useAuthCommand, useMe } from "@/api/hooks";
+import { useAuthCommand, useMe, useRegistrationStatus } from "@/api/hooks";
 import { Brand } from "@/app/Brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [password, setPassword] = useState("");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const isLogin = mode === "login";
+  const registration = useRegistrationStatus();
 
   const submit = useAuthCommand(() =>
     isLogin ? api.login(email, password) : api.register(email, password, timezone),
@@ -67,6 +68,14 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               {isLogin ? "Bom te ver de novo." : "Leva menos de um minuto."}
             </p>
           </div>
+          {!isLogin && registration.data?.open === false && (
+            <p
+              role="status"
+              className="rounded-lg border border-warning/50 px-3 py-2 text-sm text-warning"
+            >
+              Novos cadastros estão fechados no momento.
+            </p>
+          )}
           <form className="flex flex-col gap-4" onSubmit={onSubmit}>
             <div className="flex flex-col gap-2">
               <Label htmlFor="email">E-mail</Label>

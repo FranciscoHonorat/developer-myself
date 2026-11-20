@@ -76,5 +76,8 @@ class MongoSessionHistoryStore:
         }
         return await self._find(query, sort=1, limit=limit)
 
+    async def count_for(self, learner_id: str) -> int:
+        return await self._sessions.count_documents({"learner_id": learner_id})
+
     async def delete_for(self, learner_id: str) -> None:
         await self._sessions.delete_many({"learner_id": learner_id})

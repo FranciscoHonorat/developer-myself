@@ -5,6 +5,7 @@ from developer_myself.identity.domain.model import (
     Email,
     EmailAlreadyRegisteredError,
     User,
+    UserCursor,
     UserId,
 )
 
@@ -27,6 +28,10 @@ class InMemoryUserRepository:
     async def delete(self, user_id: UserId) -> None:
         self._users.pop(user_id, None)
 
+    async def page(self, limit: int, after: UserCursor | None = None) -> list[User]:
+        found = [u for u in self._users.values() if after is None or after.is_after(u)]
+        return sorted(found, key=lambda u: (u.created_at, u.id.value), reverse=True)[:limit]
+
 
 @dataclass(slots=True)
 class InMemoryAuthSessionRepository:
@@ -44,6 +49,17 @@ class InMemoryAuthSessionRepository:
     async def delete_all_for(self, user_id: UserId) -> None:
         for key in [k for k, s in self._sessions.items() if s.user_id == user_id]:
             del self._sessions[key]
+
+
+@dataclass(slots=True)
+class InMemoryRegistrationGate:
+    _open: bool = True
+
+    async def is_open(self) -> bool:
+        return self._open
+
+    async def set_open(self, open: bool) -> None:
+        self._open = open
 
 
 @dataclass(slots=True)
