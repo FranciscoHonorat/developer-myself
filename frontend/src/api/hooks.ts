@@ -15,6 +15,9 @@ export const keys = {
   schedule: (id: string) => ["schedule", id] as const,
   notebook: (id: string) => ["notebook", id] as const,
   notebooks: ["notebooks"] as const,
+  adminAccounts: ["admin", "accounts"] as const,
+  adminRegistration: ["admin", "registration"] as const,
+  registration: ["registration"] as const,
 };
 
 export const useMe = () => useQuery({ queryKey: keys.me, queryFn: api.me, retry: false });
@@ -89,3 +92,44 @@ export const useChangePreferences = () =>
   useCommand((p: { minutes: number; restDays: number[] }) =>
     api.changePreferences(p.minutes, p.restDays),
   );
+
+// ------------------------------------------------------------------ admin
+export const useRegistrationStatus = () =>
+  useQuery({ queryKey: keys.registration, queryFn: api.registrationStatus });
+
+export const useAdminAccounts = () =>
+  useInfiniteQuery({
+    queryKey: keys.adminAccounts,
+    queryFn: ({ pageParam }) => api.adminAccounts(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.next_cursor,
+  });
+
+export const useAdminRegistration = () =>
+  useQuery({ queryKey: keys.adminRegistration, queryFn: api.adminRegistration });
+
+export function useSetRegistration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (open: boolean) => api.setRegistration(open),
+    onSuccess: (data) => qc.setQueryData(keys.adminRegistration, data),
+  });
+}
+
+export function useAdminDeleteAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.adminDeleteAccount(id),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.adminAccounts }),
+  });
+}
+
+/** Troca o username: a sessão continua, só o `me` em cache é atualizado. */
+export function useChangeUsername() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { username: string; password: string }) =>
+      api.changeUsername(a.username, a.password),
+    onSuccess: (me) => qc.setQueryData(keys.me, me),
+  });
+}

@@ -4,6 +4,7 @@ import hashlib
 import re
 import secrets
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -28,11 +29,41 @@ class InvalidCredentialsError(IdentityError):
     """Mensagem genérica: nunca confirma se o e-mail existe (ADR-0009)."""
 
     def __init__(self) -> None:
-        super().__init__("E-mail ou senha inválidos.")
+        super().__init__("Username ou senha inválidos.")
 
 
 class NotAuthenticatedError(IdentityError):
     pass
+
+
+class InvalidUsernameError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Use de 3 a 30 caracteres: letras minúsculas, números, ponto, _ ou -.")
+
+
+class UsernameTakenError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Este username já está em uso.")
+
+
+class NotAdminError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Você não tem acesso à área de admin.")
+
+
+class RegistrationClosedError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Novos cadastros estão fechados no momento.")
+
+
+class CannotDeleteSelfError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Para excluir a própria conta, use a página Conta.")
+
+
+class UserNotFoundError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Conta não encontrada.")
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -61,6 +92,48 @@ class Email:
         object.__setattr__(self, "value", normalized)
 
 
+USERNAME_MIN = 3
+USERNAME_MAX = 30
+_USERNAME_RE = re.compile(rf"^[a-z0-9._-]{{{USERNAME_MIN},{USERNAME_MAX}}}$")
+_USERNAME_BAD_CHAR = re.compile(r"[^a-z0-9._-]")
+
+
+@dataclass(frozen=True, slots=True)
+class Username:
+    """Identificador de login. Comparado sem diferenciar maiúsculas: guarda minúsculo."""
+
+    value: str
+
+    def __post_init__(self) -> None:
+        normalized = self.value.strip().lower()
+        if not _USERNAME_RE.fullmatch(normalized):
+            raise InvalidUsernameError
+        object.__setattr__(self, "value", normalized)
+
+
+def username_from_email(email: Email, taken: Callable[[str], bool]) -> Username:
+    """Username de conta antiga: parte do e-mail antes do @, adaptada à regra.
+
+    Caractere fora da regra vira `_`; curto demais ganha `-1`; colisão ganha `-2`, `-3`…
+    (cortando a base para o total caber em 30).
+    """
+    base = _USERNAME_BAD_CHAR.sub("_", email.value.split("@", 1)[0])[:USERNAME_MAX]
+    if len(base) < USERNAME_MIN:
+        base = f"{base}-1"
+    candidate, n = base, 1
+    while taken(candidate):
+        n += 1
+        suffix = f"-{n}"
+        candidate = base[: USERNAME_MAX - len(suffix)] + suffix
+    return Username(candidate)
+
+
+def parse_admin_emails(raw: str) -> frozenset[Email]:
+    """`DM_ADMIN_EMAILS`: e-mails separados por vírgula. Itens vazios são ignorados;
+    um e-mail inválido derruba o boot (melhor que um admin silenciosamente ausente)."""
+    return frozenset(Email(item) for item in raw.split(",") if item.strip())
+
+
 def validate_password(password: str) -> None:
     if len(password) < PASSWORD_MIN:
         raise WeakPasswordError(f"A senha precisa ter pelo menos {PASSWORD_MIN} caracteres.")
@@ -74,6 +147,23 @@ class User:
     email: Email
     password_hash: str
     created_at: datetime
+    # None só em conta antiga até a migração do boot (`assign_missing_usernames`).
+    username: Username | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class UserCursor:
+    """Última conta vista na listagem do admin. Keyset: (created_at, id), decrescente."""
+
+    created_at: datetime
+    user_id: uuid.UUID
+
+    @classmethod
+    def of(cls, user: User) -> UserCursor:
+        return cls(user.created_at, user.id.value)
+
+    def is_after(self, user: User) -> bool:
+        return (user.created_at, user.id.value) < (self.created_at, self.user_id)
 
 
 @dataclass(frozen=True, slots=True)

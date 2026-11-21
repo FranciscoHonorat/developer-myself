@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     cookie_name: str = "dm_session"
     cookie_secure: bool = True
     session_ttl_days: int = 14
+    # E-mails com acesso à área de admin, separados por vírgula. Vazio = ninguém é admin.
+    admin_emails: str = ""
 
     default_timezone: str = "America/Sao_Paulo"
     static_dir: str | None = None

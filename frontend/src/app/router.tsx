@@ -1,7 +1,7 @@
 import { createBrowserRouter, createMemoryRouter, Navigate, type RouteObject } from "react-router";
 import { AuthPage } from "@/pages/AuthPage";
 import { AppShell } from "./AppShell";
-import { RequireAuth } from "./RequireAuth";
+import { RequireAdmin, RequireAuth } from "./RequireAuth";
 
 // Cada seção é um chunk próprio: o primeiro carregamento só baixa a casca e a seção aberta.
 const page = (load: () => Promise<{ Component: () => React.JSX.Element }>) => ({ lazy: load });
@@ -41,6 +41,16 @@ export const routes: RouteObject[] = [
       {
         path: "conta",
         ...page(() => import("@/pages/AccountPage").then((m) => ({ Component: m.AccountPage }))),
+      },
+      {
+        path: "admin",
+        element: <RequireAdmin />,
+        children: [
+          {
+            index: true,
+            ...page(() => import("@/pages/AdminPage").then((m) => ({ Component: m.AdminPage }))),
+          },
+        ],
       },
       { path: "*", element: <Navigate to="/hoje" replace /> },
     ],

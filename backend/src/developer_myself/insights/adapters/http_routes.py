@@ -1,8 +1,5 @@
 """Leitura do histórico, estatísticas e exportação de dados (LGPD)."""
 
-import base64
-import binascii
-import json
 from datetime import date, datetime
 from typing import Annotated
 
@@ -14,7 +11,8 @@ from developer_myself.insights.application.history import (
     HistoryQueries,
     SessionRecord,
 )
-from developer_myself.shared.adapters.http import LearnerIdDep, http_error
+from developer_myself.shared.adapters.cursor import decode_cursor, encode_cursor
+from developer_myself.shared.adapters.http import LearnerIdDep
 
 
 class RecallItemOut(BaseModel):
@@ -105,24 +103,6 @@ class HistoryPageOut(BaseModel):
     next_cursor: str | None
 
 
-def encode_cursor(cursor: HistoryCursor) -> str:
-    raw = json.dumps({"t": cursor.finished_at.isoformat(), "id": cursor.event_id})
-    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
-
-
-def decode_cursor(token: str) -> HistoryCursor:
-    """Cursor vem do cliente: qualquer coisa fora do formato vira 422, nunca 500."""
-    try:
-        raw = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
-        finished_at = datetime.fromisoformat(raw["t"])
-        event_id = raw["id"]
-        if not isinstance(event_id, str) or finished_at.tzinfo is None:
-            raise ValueError
-    except (binascii.Error, ValueError, TypeError, KeyError, UnicodeDecodeError) as exc:
-        raise http_error(422, "Cursor de paginação inválido.", "INVALID_CURSOR") from exc
-    return HistoryCursor(finished_at, event_id)
-
-
 @router.get("/history")
 async def history(
     learner_id: LearnerIdDep,
@@ -130,11 +110,13 @@ async def history(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
 ) -> HistoryPageOut:
-    after = decode_cursor(cursor) if cursor else None
+    after = HistoryCursor(*decode_cursor(cursor)) if cursor else None
     page = await q.page(learner_id, limit, after)
     return HistoryPageOut(
         items=[SessionOut.of(r) for r in page.items],
-        next_cursor=encode_cursor(page.next) if page.next else None,
+        next_cursor=(
+            encode_cursor(page.next.finished_at, page.next.event_id) if page.next else None
+        ),
     )
 
 

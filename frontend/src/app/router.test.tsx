@@ -101,7 +101,7 @@ describe("rotas e casca", () => {
     fakeApi({ loggedIn: false });
     const router = renderAt("/caderno/c1");
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText("E-mail"), "eu@exemplo.com");
+    await user.type(await screen.findByLabelText("Username"), "eu");
     expect(router.state.location.pathname).toBe("/entrar");
     await user.type(screen.getByLabelText("Senha"), "senha-forte-123");
     await user.click(screen.getByRole("button", { name: "Entrar" }));
@@ -114,6 +114,12 @@ describe("rotas e casca", () => {
     const router = renderAt("/entrar");
     await nav();
     expect(router.state.location.pathname).toBe("/hoje");
+  });
+
+  it("/admin sem ser admin volta para o Hoje", async () => {
+    fakeApi({ loggedIn: true });
+    const router = renderAt("/admin");
+    await waitFor(() => expect(router.state.location.pathname).toBe("/hoje"));
   });
 
   it("F5 em /progresso?aba=historico abre o histórico", async () => {

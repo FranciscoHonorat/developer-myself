@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router";
+import { Navigate, Outlet, useLocation } from "react-router";
 import { useMe } from "@/api/hooks";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -17,4 +17,12 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
   if (me.isError) return <Navigate to="/entrar" replace state={{ from: location }} />;
   return children;
+}
+
+/** Área de admin: quem não é admin volta para o Hoje. A API confere de novo (403). */
+export function RequireAdmin() {
+  const me = useMe();
+  if (me.isPending) return null;
+  if (!me.data?.is_admin) return <Navigate to="/hoje" replace />;
+  return <Outlet />;
 }

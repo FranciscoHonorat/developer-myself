@@ -10,6 +10,28 @@ export interface Me {
   id: string;
   email: string;
   created_at: string;
+  username?: string | null;
+  is_admin?: boolean;
+}
+
+/** Conta vista pelo admin: só contagens, nunca anotações (spec do admin). */
+export interface AdminAccount {
+  id: string;
+  email: string;
+  username: string | null;
+  created_at: string;
+  last_activity_at: string | null;
+  contents: number;
+  sessions: number;
+}
+
+export interface AdminAccountsPage {
+  items: AdminAccount[];
+  next_cursor: string | null;
+}
+
+export interface Registration {
+  open: boolean;
 }
 
 export interface Challenge {

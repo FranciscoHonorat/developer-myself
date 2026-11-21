@@ -1,5 +1,6 @@
 // `api/` é o port do frontend: componentes NUNCA chamam fetch direto (ADR-0011).
 import type {
+  AdminAccountsPage,
   Challenge,
   CompetencySheet,
   Content,
@@ -14,6 +15,7 @@ import type {
   Outcome,
   Plan,
   Recommendations,
+  Registration,
   SessionKind,
   Stats,
   Today,
@@ -65,10 +67,12 @@ async function request<T>(
 }
 
 export const api = {
-  register: (email: string, password: string, timezone: string) =>
-    request<Me>("POST", "/auth/register", { email, password, timezone }),
-  login: (email: string, password: string) =>
-    request<void>("POST", "/auth/login", { email, password }),
+  register: (username: string, email: string, password: string, timezone: string) =>
+    request<Me>("POST", "/auth/register", { username, email, password, timezone }),
+  login: (username: string, password: string) =>
+    request<void>("POST", "/auth/login", { username, password }),
+  changeUsername: (username: string, password: string) =>
+    request<Me>("PUT", "/auth/username", { username, password }),
   logout: () => request<void>("POST", "/auth/logout"),
   me: () => request<Me>("GET", "/auth/me"),
   deleteAccount: (password: string) => request<void>("POST", "/auth/delete-account", { password }),
@@ -122,4 +126,14 @@ export const api = {
     return request<Notebook>("PUT", `/contents/${contentId}/notebook`, body, { keepalive });
   },
   notebooks: () => request<NotebookSummary[]>("GET", "/notebooks"),
+
+  registrationStatus: () => request<Registration>("GET", "/auth/registration"),
+  adminAccounts: (cursor: string | null = null, limit = 20) =>
+    request<AdminAccountsPage>(
+      "GET",
+      `/admin/accounts?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
+  adminDeleteAccount: (id: string) => request<void>("DELETE", `/admin/accounts/${id}`),
+  adminRegistration: () => request<Registration>("GET", "/admin/registration"),
+  setRegistration: (open: boolean) => request<Registration>("PUT", "/admin/registration", { open }),
 };

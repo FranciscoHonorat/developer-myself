@@ -1,7 +1,7 @@
 import { Download, LogOut } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useId, useState } from "react";
 import { api } from "@/api/client";
-import { useAuthCommand, useChangeTimezone, useMe, usePlan } from "@/api/hooks";
+import { useAuthCommand, useChangeTimezone, useChangeUsername, useMe, usePlan } from "@/api/hooks";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ErrorState } from "@/components/ErrorState";
 import { Button } from "@/components/ui/button";
@@ -22,15 +22,19 @@ function Card({
   danger?: boolean;
   children: ReactNode;
 }) {
+  const headingId = useId();
   return (
     <section
+      aria-labelledby={headingId}
       className={cn(
         "flex flex-col gap-4 rounded-xl border bg-card p-5",
         danger && "border-destructive/40",
       )}
     >
       <div className="flex flex-col gap-1">
-        <h2 className={cn("text-base font-semibold", danger && "text-destructive")}>{title}</h2>
+        <h2 id={headingId} className={cn("text-base font-semibold", danger && "text-destructive")}>
+          {title}
+        </h2>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
       {children}
@@ -87,6 +91,8 @@ export function AccountPage() {
           <LogOut aria-hidden /> Sair
         </Button>
       </header>
+
+      <UsernameCard current={me.data?.username ?? null} />
 
       <Card title="Aparência" description="Vale só neste navegador.">
         <ThemeSelect />
@@ -177,5 +183,70 @@ export function AccountPage() {
         />
       </Card>
     </div>
+  );
+}
+
+/** Trocar o username (é o login): pede a senha atual, como a exclusão de conta. */
+function UsernameCard({ current }: { current: string | null }) {
+  const change = useChangeUsername();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    change.mutate(
+      { username, password },
+      {
+        onSuccess: () => {
+          setUsername("");
+          setPassword("");
+        },
+      },
+    );
+  };
+
+  return (
+    <Card
+      title="Username"
+      description={
+        <>
+          É o que você usa para entrar. Atual:{" "}
+          <span className="font-mono text-foreground">{current ?? "—"}</span>
+        </>
+      }
+    >
+      <form className="flex flex-col gap-3" onSubmit={onSubmit}>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="new-username">Novo username</Label>
+          <Input
+            id="new-username"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            required
+            minLength={3}
+            maxLength={30}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="username-password">Senha atual</Label>
+          <Input
+            id="username-password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        <Button type="submit" className="self-start" disabled={change.isPending}>
+          Trocar username
+        </Button>
+      </form>
+      {change.isSuccess && <p className="text-sm text-primary">Username atualizado.</p>}
+      <ErrorState error={change.error} compact />
+    </Card>
   );
 }

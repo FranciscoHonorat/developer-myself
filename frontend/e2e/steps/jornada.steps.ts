@@ -11,7 +11,9 @@ async function closeOutcome(page: Page) {
 
 Given("que eu criei uma conta nova", async ({ page }) => {
   await page.goto("/cadastro");
-  await page.getByLabel("E-mail").fill(`e2e-${crypto.randomUUID()}@exemplo.com`);
+  const id = crypto.randomUUID().slice(0, 8);
+  await page.getByLabel("Username").fill(`e2e-${id}`);
+  await page.getByLabel("E-mail").fill(`e2e-${id}@exemplo.com`);
   await page.getByLabel("Senha").fill("senha-forte-e2e-123");
   await page.getByRole("button", { name: "Criar conta" }).click();
   await expect(page.getByRole("heading", { name: "Adicione seu primeiro conteúdo" })).toBeVisible();

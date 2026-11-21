@@ -51,9 +51,14 @@ def test_health_checks_and_static_files_are_not_limited(client: TestClient) -> N
 
 def test_register_is_limited_per_hour() -> None:
     with make_client(rate_limit_registers_per_hour=1) as c:
-        body = {"email": "a@exemplo.com", "password": PASSWORD, "timezone": "America/Sao_Paulo"}
+        body = {
+            "username": "aaa",
+            "email": "a@exemplo.com",
+            "password": PASSWORD,
+            "timezone": "America/Sao_Paulo",
+        }
         assert c.post("/api/auth/register", json=body, headers=H).status_code == 201
-        body["email"] = "b@exemplo.com"
+        body |= {"username": "bbb", "email": "b@exemplo.com"}
         r = c.post("/api/auth/register", json=body, headers=H)
         assert r.status_code == 429
         assert int(r.headers["retry-after"]) > 60

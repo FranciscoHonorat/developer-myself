@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from pytest_bdd import given, parsers, then, when
+from tests.features.identity_world import admin  # noqa: F401  (fixture dos cenários de identidade)
 
 from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.insights.adapters.memory.store import InMemorySessionHistoryStore

@@ -1,5 +1,14 @@
-import { CircleUser, type LucideIcon, NotebookPen, Route, Sun, TrendingUp } from "lucide-react";
+import {
+  CircleUser,
+  type LucideIcon,
+  NotebookPen,
+  Route,
+  Shield,
+  Sun,
+  TrendingUp,
+} from "lucide-react";
 import { NavLink } from "react-router";
+import { useMe } from "@/api/hooks";
 import { cn } from "@/lib/utils";
 import { Brand } from "./Brand";
 
@@ -40,6 +49,7 @@ function NavItem({ to, label, icon: Icon, className }: Section & { className?: s
  * coluna só de ícones no tablet e menu lateral completo no desktop.
  */
 export function MainNav() {
+  const me = useMe();
   return (
     <nav
       aria-label="Seções"
@@ -58,6 +68,7 @@ export function MainNav() {
       {SECTIONS.map((s) => (
         <NavItem key={s.to} {...s} />
       ))}
+      {me.data?.is_admin && <NavItem to="/admin" label="Admin" icon={Shield} />}
       <NavItem to="/conta" label="Conta" icon={CircleUser} className="hidden sm:flex sm:mt-auto" />
     </nav>
   );

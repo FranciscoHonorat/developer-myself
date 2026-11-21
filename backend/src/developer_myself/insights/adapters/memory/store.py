@@ -34,6 +34,9 @@ class InMemorySessionHistoryStore:
         ]
         return sorted(found, key=lambda r: (r.finished_at, r.event_id), reverse=True)[:limit]
 
+    async def count_for(self, learner_id: str) -> int:
+        return sum(1 for r in self._records.values() if r.learner_id == learner_id)
+
     async def delete_for(self, learner_id: str) -> None:
         for key in [k for k, r in self._records.items() if r.learner_id == learner_id]:
             del self._records[key]
