@@ -24,7 +24,7 @@ services:
 
   worker:
     <<: *app
-    command: ["python", "-m", "developer_myself.worker"]
+    command: ["python", "-m", "developer_myself.entrypoints.worker"]
     healthcheck: { disable: true }
 
   mongo:

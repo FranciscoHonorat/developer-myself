@@ -20,7 +20,7 @@ export default defineConfig({
   ],
   // API real em modo memória servindo o build do React na mesma origem.
   webServer: {
-    command: `cd ../backend && poetry run uvicorn developer_myself.main:app --port ${PORT}`,
+    command: `cd ../backend && poetry run uvicorn developer_myself.entrypoints.api:app --port ${PORT}`,
     url: `http://localhost:${PORT}/healthz`,
     reuseExistingServer: false,
     timeout: 60_000,

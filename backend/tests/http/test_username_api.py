@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from developer_myself.bootstrap import build_memory_container, create_app
+from developer_myself.composition.container import build_memory_container, create_app
 from developer_myself.identity.adapters.memory.repositories import PlainTextHasherForTests
 from developer_myself.identity.domain.model import Email, User, UserId
 from developer_myself.shared.clock import FakeClock

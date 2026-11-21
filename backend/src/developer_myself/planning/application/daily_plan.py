@@ -15,7 +15,7 @@ from developer_myself.insights.application.recommender import ReviewRecommender,
 from developer_myself.learning.domain.content import Content
 from developer_myself.learning.domain.study_plan import StudyPlan
 from developer_myself.learning.domain.value_objects import ContentStatus
-from developer_myself.review_candidates import review_candidates
+from developer_myself.planning.application.review_candidates import review_candidates
 
 MAX_REVIEWS_PER_DAY = 2
 

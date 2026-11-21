@@ -3,13 +3,13 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from developer_myself.competency_sheet import competency_sheet
 from developer_myself.curriculum.domain.progression import (
     DECAY_PER_DAY,
     FRESHNESS_FLOOR,
     GRACE_DAYS,
     CompetencyScore,
 )
+from developer_myself.planning.application.competency_sheet import competency_sheet
 from developer_myself.shared.adapters.http import LearnerIdDep
 
 router = APIRouter(prefix="/api", tags=["curriculum"])

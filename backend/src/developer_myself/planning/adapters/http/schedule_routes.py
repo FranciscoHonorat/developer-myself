@@ -14,10 +14,10 @@ from developer_myself.curriculum.domain.week import (
     Block,
     WeekDay,
 )
-from developer_myself.daily_plan import DailyItem, daily_plan
 from developer_myself.learning.domain.value_objects import ContentId
+from developer_myself.planning.application.daily_plan import DailyItem, daily_plan
+from developer_myself.planning.application.weekly_plan import weekly_plan
 from developer_myself.shared.adapters.http import LearnerIdDep
-from developer_myself.weekly_plan import weekly_plan
 
 router = APIRouter(prefix="/api", tags=["curriculum"])
 

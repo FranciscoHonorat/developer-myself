@@ -5,7 +5,7 @@ from tests.features.conftest import World
 
 from developer_myself.curriculum.domain.week import BlockKind, WeekDay
 from developer_myself.insights.adapters.neural.recommender import load_best_recommender
-from developer_myself.weekly_plan import weekly_plan
+from developer_myself.planning.application.weekly_plan import weekly_plan
 
 scenarios("semana.feature")
 WEEKDAYS = {

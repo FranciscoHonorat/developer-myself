@@ -4,6 +4,7 @@ Cada "degrau" (regra simples → FSRS → rede neural) é só um adapter deste p
 Recebe primitivos, nunca o modelo do `learning` (contextos só se falam por IDs/dados).
 """
 
+import math
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -34,6 +35,19 @@ class ReviewRecommender(Protocol):
     metadata: dict[str, object]
 
     def recall_probability(self, candidate: ReviewCandidate) -> float: ...
+
+
+class SpacedRepetitionRule:
+    """Degrau 1: regra fixa, funciona sem dado nenhum. Serve de fallback."""
+
+    name = "regra"
+
+    def __init__(self) -> None:
+        self.metadata: dict[str, object] = {}
+
+    def recall_probability(self, candidate: ReviewCandidate) -> float:
+        interval = 2.0 ** (1 + candidate.level_rank) + candidate.points / 5
+        return math.exp(-candidate.days_since_last_session / interval)
 
 
 def rank(recommender: ReviewRecommender, candidates: list[ReviewCandidate]) -> list[Recommendation]:

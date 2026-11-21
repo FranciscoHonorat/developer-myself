@@ -19,6 +19,7 @@ from tests.features.identity_world import admin  # noqa: F401  (fixture dos cen√
 from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.insights.adapters.memory.store import InMemorySessionHistoryStore
 from developer_myself.insights.application.history import RecordSessionHistory
+from developer_myself.learning.adapters.curriculum.question_picker import RuleQuestionPicker
 from developer_myself.learning.adapters.memory.notebook_repository import (
     InMemoryNotebookRepository,
 )
@@ -50,7 +51,6 @@ from developer_myself.learning.domain.value_objects import (
     RecallRating,
     SessionKind,
 )
-from developer_myself.review_questions import RuleQuestionPicker
 from developer_myself.shared.clock import FakeClock
 
 GOOD_NOTES = NotesInput(

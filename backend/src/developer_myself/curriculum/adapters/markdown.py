@@ -1,16 +1,12 @@
 """Gera `Docs/Cronograma de estudos.md` a partir da trilha real (em andamento + fila).
 
-As datas vêm da projeção simulada (`projection.py`): as regras reais do domínio, até 3 em
-paralelo e o ritmo escolhido. Inclui a semana-modelo. `make schedule-doc` (stack no ar).
+Só renderiza: quem busca a trilha, a projeção e a semana é `entrypoints/cli/schedule_doc.py`
+(`make schedule-doc`, stack no ar).
 """
 
-import asyncio
-import sys
-import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
-from zoneinfo import ZoneInfo
 
 from developer_myself.curriculum.application.schedules import schedule_for
 from developer_myself.curriculum.domain.schedule import (
@@ -169,51 +165,3 @@ def render(
                 f"| {done}{d.day}{mark} | {KIND[d.kind]} | {_cell(d.focus)} | {_cell(warm)} |"
             )
     return "\n".join(out) + "\n"
-
-
-async def _main() -> None:  # pragma: no cover - depende da stack no ar
-    from developer_myself.learning.domain.value_objects import ContentId  # noqa: PLC0415
-    from developer_myself.mongo_bootstrap import build_mongo_container  # noqa: PLC0415
-    from developer_myself.projection import project  # noqa: PLC0415
-    from developer_myself.shared.adapters.mongo_setup import make_client  # noqa: PLC0415
-    from developer_myself.shared.settings import Settings  # noqa: PLC0415
-    from developer_myself.weekly_plan import weekly_plan  # noqa: PLC0415
-
-    container = await build_mongo_container(Settings())
-    try:
-        # Uso pessoal: a (única) trilha do banco.
-        settings = Settings()
-        client = make_client(settings.mongo_url.get_secret_value())
-        doc = await client[settings.mongo_db].study_plans.find_one({}, {"_id": 1})
-        await client.close()
-        if doc is None:
-            raise SystemExit("Nenhuma trilha encontrada.")
-        plan = await container.learning.get_plan(doc["_id"])
-        now = container.clock.now()
-        recommender = await container.recommender.current()
-        active = [c for c in plan.contents if c.status.value != "LOCKED"]
-        ordered = active + plan.queue
-        items = [TrailItem(c.title.value, c.status.value, c.points.value) for c in ordered]
-        today = now.astimezone(ZoneInfo(plan.timezone.name)).date()
-        projection = project(plan, today)
-        starts = {
-            plan.content(ContentId(uuid.UUID(k))).title.value: m.started
-            for k, m in projection.milestones.items()
-        }
-        week = weekly_plan(plan, recommender, now)
-        sys.stdout.write(
-            render(
-                items,
-                today,
-                starts=starts,
-                week=week,
-                finish=projection.last("advanced"),
-                max_in_progress=plan.unlock_policy.max_in_progress,
-            )
-        )
-    finally:
-        await container.close()
-
-
-if __name__ == "__main__":  # pragma: no cover
-    asyncio.run(_main())

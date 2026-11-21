@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from developer_myself.backfill_to_review import backfill_last_to_review
+from developer_myself.entrypoints.cli.backfill_to_review import backfill_last_to_review
 from developer_myself.insights.adapters.memory.store import InMemorySessionHistoryStore
 from developer_myself.insights.application.history import SessionRecord
 from developer_myself.learning.adapters.memory.repository import InMemoryStudyPlanRepository

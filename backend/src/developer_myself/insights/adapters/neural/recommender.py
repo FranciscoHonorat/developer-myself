@@ -1,28 +1,17 @@
-"""Adapters do port `ReviewRecommender`: degrau 1 (regra) e degrau 3 (rede neural)."""
+"""Adapter do port `ReviewRecommender`: degrau 3 (rede neural), com fallback para a regra."""
 
 import json
-import math
 from pathlib import Path
 from typing import Any
 
 from developer_myself.insights.adapters.neural.features import FEATURE_NAMES, to_features
 from developer_myself.insights.adapters.neural.mlp import MLP
-from developer_myself.insights.application.recommender import ReviewCandidate
+from developer_myself.insights.application.recommender import (
+    ReviewCandidate,
+    SpacedRepetitionRule,
+)
 
 DEFAULT_MODEL_PATH = Path(__file__).with_name("model.json")
-
-
-class SpacedRepetitionRule:
-    """Degrau 1: regra fixa, funciona sem dado nenhum. Serve de fallback."""
-
-    name = "regra"
-
-    def __init__(self) -> None:
-        self.metadata: dict[str, object] = {}
-
-    def recall_probability(self, candidate: ReviewCandidate) -> float:
-        interval = 2.0 ** (1 + candidate.level_rank) + candidate.points / 5
-        return math.exp(-candidate.days_since_last_session / interval)
 
 
 class NeuralReviewRecommender:

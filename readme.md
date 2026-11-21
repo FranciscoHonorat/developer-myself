@@ -46,7 +46,7 @@ Na primeira vez, o `make up` cria o `.env` a partir do `.env.example`. **Troque 
 
 ```bash
 # API em memória (sem Docker) + Vite com hot reload
-cd backend && DM_STORAGE=memory DM_COOKIE_SECURE=false poetry run uvicorn developer_myself.main:app --reload
+cd backend && DM_STORAGE=memory DM_COOKIE_SECURE=false poetry run uvicorn developer_myself.entrypoints.api:app --reload
 cd frontend && npm run dev     # http://localhost:5173 (proxy /api → :8000)
 ```
 
@@ -69,17 +69,21 @@ cd frontend && npm run dev     # http://localhost:5173 (proxy /api → :8000)
 
 ## Arquitetura
 
-Hexagonal com três *bounded contexts* ([ADR-0003](Docs/ADR/ADR-0003-arquitetura-hexagonal.md)):
+Hexagonal com *bounded contexts* ([ADR-0003](Docs/ADR/ADR-0003-arquitetura-hexagonal.md)). A raiz do pacote não tem módulos soltos: o teste de arquitetura garante isso ([ADR-0013](Docs/ADR/ADR-0013-organizacao-do-pacote.md)).
 
 ```
 backend/src/developer_myself/
-├── learning/    core: StudyPlan (agregado), políticas, casos de uso, adapters http/mongo/rabbitmq/memory
-├── identity/    cadastro, login, cookie de sessão opaco, Argon2id
-├── insights/    projeção do histórico de sessões e estatísticas (alimentada por eventos)
+├── learning/     core: StudyPlan (agregado), políticas, casos de uso, adapters http/mongo/rabbitmq/memory
+├── curriculum/   catálogo, competências, cronograma de 30 dias, semana-modelo
+├── identity/     cadastro, login, cookie de sessão opaco, Argon2id
+├── insights/     projeção do histórico de sessões e estatísticas (alimentada por eventos)
 │   └── adapters/neural/  primeira rede neural (MLP do zero): chance de lembrar cada conteúdo
-├── shared/      Clock, envelope de evento, settings, logging, peças HTTP comuns
-├── bootstrap.py composition root (único lugar que conhece todos os adapters)
-└── worker.py    relay do outbox + consumer RabbitMQ
+├── planning/     orquestração: hoje, semana, projeção, recomendação e competências
+│                 (lê domain/application dos outros contextos, nunca adapters)
+├── accounts/     rotas que cruzam contextos por IDs: área de admin e exportação (LGPD)
+├── shared/       Clock, envelope de evento, settings, logging, peças HTTP comuns
+├── composition/  composition root: único lugar que conhece todos os adapters (memória e Mongo)
+└── entrypoints/  api.py (uvicorn), worker.py (outbox + consumer), cli/ (train, retrain, schedule-doc, backfill)
 frontend/src/    React + TanStack Query; `api/` é o único módulo que chama fetch
 ```
 
