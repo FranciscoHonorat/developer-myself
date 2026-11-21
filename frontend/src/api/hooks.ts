@@ -123,3 +123,13 @@ export function useAdminDeleteAccount() {
     onSettled: () => qc.invalidateQueries({ queryKey: keys.adminAccounts }),
   });
 }
+
+/** Troca o username: a sessão continua, só o `me` em cache é atualizado. */
+export function useChangeUsername() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { username: string; password: string }) =>
+      api.changeUsername(a.username, a.password),
+    onSuccess: (me) => qc.setQueryData(keys.me, me),
+  });
+}

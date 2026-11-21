@@ -33,9 +33,11 @@ from developer_myself.identity.domain.model import (
     EmailAlreadyRegisteredError,
     IdentityError,
     InvalidCredentialsError,
+    InvalidUsernameError,
     NotAdminError,
     NotAuthenticatedError,
     RegistrationClosedError,
+    UsernameTakenError,
     UserNotFoundError,
     parse_admin_emails,
 )
@@ -156,11 +158,13 @@ def _error(status_code: int, exc: Exception) -> JSONResponse:
     return JSONResponse({"detail": str(exc), "code": type(exc).__name__}, status_code=status_code)
 
 
-ADMIN_ERRORS: dict[type[IdentityError], tuple[int, str]] = {
+STABLE_ERROR_CODES: dict[type[IdentityError], tuple[int, str]] = {
     NotAdminError: (403, "FORBIDDEN"),
     RegistrationClosedError: (403, "REGISTRATION_CLOSED"),
     CannotDeleteSelfError: (409, "CANNOT_DELETE_SELF"),
     UserNotFoundError: (404, "NOT_FOUND"),
+    UsernameTakenError: (409, "USERNAME_TAKEN"),
+    InvalidUsernameError: (422, "INVALID_USERNAME"),
 }
 
 
@@ -182,8 +186,8 @@ def _install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(IdentityError)
     async def identity_error(_: Request, exc: IdentityError) -> JSONResponse:
-        # Erros da área admin têm `code` estável: o frontend decide a mensagem por ele.
-        for kind, (status_code, code) in ADMIN_ERRORS.items():
+        # Erros com `code` estável: o frontend decide a mensagem por ele.
+        for kind, (status_code, code) in STABLE_ERROR_CODES.items():
             if isinstance(exc, kind):
                 return JSONResponse({"detail": str(exc), "code": code}, status_code=status_code)
         if isinstance(exc, InvalidCredentialsError | NotAuthenticatedError):
@@ -212,6 +216,9 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         built = container or await build_container(settings)
         app.state.container = built
         app.state.authenticate = _authenticator(built)
+        # Antes de aceitar login: conta antiga sem username ficaria trancada para fora.
+        if filled := await built.identity.assign_missing_usernames():
+            log.warning("usernames_assigned", count=filled)
         log.info("api_started", storage=settings.storage)
         if missing := await built.identity.admin_emails_without_account():
             # Sem o e-mail no log: só quantos. Quem cadastrar esse e-mail primeiro vira admin.

@@ -67,10 +67,12 @@ async function request<T>(
 }
 
 export const api = {
-  register: (email: string, password: string, timezone: string) =>
-    request<Me>("POST", "/auth/register", { email, password, timezone }),
-  login: (email: string, password: string) =>
-    request<void>("POST", "/auth/login", { email, password }),
+  register: (username: string, email: string, password: string, timezone: string) =>
+    request<Me>("POST", "/auth/register", { username, email, password, timezone }),
+  login: (username: string, password: string) =>
+    request<void>("POST", "/auth/login", { username, password }),
+  changeUsername: (username: string, password: string) =>
+    request<Me>("PUT", "/auth/username", { username, password }),
   logout: () => request<void>("POST", "/auth/logout"),
   me: () => request<Me>("GET", "/auth/me"),
   deleteAccount: (password: string) => request<void>("POST", "/auth/delete-account", { password }),

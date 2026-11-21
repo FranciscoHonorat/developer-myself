@@ -15,7 +15,7 @@ from developer_myself.identity.domain.model import (
     Email,
     EmailAlreadyRegisteredError,
     InvalidCredentialsError,
-    InvalidEmailError,
+    InvalidUsernameError,
     NotAdminError,
     NotAuthenticatedError,
     RegistrationClosedError,
@@ -23,7 +23,10 @@ from developer_myself.identity.domain.model import (
     User,
     UserCursor,
     UserId,
+    Username,
+    UsernameTakenError,
     UserNotFoundError,
+    username_from_email,
     validate_password,
 )
 from developer_myself.shared.clock import Clock
@@ -58,7 +61,8 @@ class IdentityUseCases:
     admin_emails: frozenset[Email] = frozenset()
     _dummy_hash: str | None = field(default=None, repr=False)
 
-    async def register(self, email: str, password: str) -> User:
+    async def register(self, username: str, email: str, password: str) -> User:
+        handle = Username(username)
         address = Email(email)
         validate_password(password)
         if not await self.registration.is_open():
@@ -71,18 +75,26 @@ class IdentityUseCases:
                 raise RegistrationClosedError
         if await self.users.get_by_email(address) is not None:
             raise EmailAlreadyRegisteredError("Não foi possível concluir o cadastro.")
-        user = User(UserId.new(), address, await self.hasher.hash(password), self.clock.now())
+        if await self.users.get_by_username(handle) is not None:
+            raise UsernameTakenError
+        user = User(
+            UserId.new(), address, await self.hasher.hash(password), self.clock.now(), handle
+        )
         await self.users.add(user)
         return user
 
-    async def login(self, email: str, password: str) -> tuple[SessionToken, AuthSession]:
+    async def login(self, username: str, password: str) -> tuple[SessionToken, AuthSession]:
         try:
-            address = Email(email)
-        except InvalidEmailError:
+            handle = Username(username)
+        except InvalidUsernameError:
             raise InvalidCredentialsError from None
-        user = await self.users.get_by_email(address)
+        user = await self.users.get_by_username(handle)
+        if user is None and await self.assign_missing_usernames():
+            # Conta criada sem username depois do boot (instância antiga no meio do deploy):
+            # migra na hora e procura de novo, em vez de esperar o próximo restart.
+            user = await self.users.get_by_username(handle)
         if user is None:
-            # Gasta o mesmo tempo de um login real: não revela se o e-mail existe.
+            # Gasta o mesmo tempo de um login real: não revela se o username existe.
             await self.hasher.verify(await self._dummy(), password)
             raise InvalidCredentialsError
         if not await self.hasher.verify(user.password_hash, password):
@@ -116,6 +128,34 @@ class IdentityUseCases:
             raise InvalidCredentialsError
         await self.sessions.delete_all_for(user_id)
         await self.users.delete(user_id)
+
+    async def change_username(self, user_id: UserId, new: str, password: str) -> User:
+        user = await self.me(user_id)
+        if not await self.hasher.verify(user.password_hash, password):
+            raise InvalidCredentialsError
+        handle = Username(new)
+        if handle != user.username:
+            await self.users.set_username(user_id, handle)
+        return await self.me(user_id)
+
+    async def assign_missing_usernames(self) -> int:
+        """Migração do boot: conta antiga ganha a parte do e-mail antes do @. Idempotente."""
+        legacy = await self.users.without_username()
+        taken: set[str] = set()
+        assigned = 0
+        for user in legacy:
+            while True:
+                candidate = username_from_email(user.email, taken.__contains__)
+                taken.add(candidate.value)
+                if await self.users.get_by_username(candidate) is not None:
+                    continue
+                try:
+                    # Condicional: se outra instância já deu um username, não sobrescreve.
+                    assigned += await self.users.assign_username_if_missing(user.id, candidate)
+                    break
+                except UsernameTakenError:  # outro processo pegou o nome no meio do caminho
+                    continue
+        return assigned
 
     # ------------------------------------------------------------------ admin
     async def is_admin(self, user_id: UserId) -> bool:

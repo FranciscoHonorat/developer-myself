@@ -1,6 +1,13 @@
 from typing import Protocol
 
-from developer_myself.identity.domain.model import AuthSession, Email, User, UserCursor, UserId
+from developer_myself.identity.domain.model import (
+    AuthSession,
+    Email,
+    User,
+    UserCursor,
+    UserId,
+    Username,
+)
 
 
 class UserRepository(Protocol):
@@ -11,6 +18,21 @@ class UserRepository(Protocol):
     async def get_by_email(self, email: Email) -> User | None: ...
 
     async def get(self, user_id: UserId) -> User | None: ...
+
+    async def get_by_username(self, username: Username) -> User | None: ...
+
+    async def without_username(self) -> list[User]:
+        """Contas antigas ainda sem username, mais antigas primeiro."""
+        ...
+
+    async def assign_username_if_missing(self, user_id: UserId, username: Username) -> bool:
+        """Migração: grava só se a conta ainda não tem username. False = já tinha (outra
+        instância chegou antes). Levanta `UsernameTakenError` se outro usuário já usa."""
+        ...
+
+    async def set_username(self, user_id: UserId, username: Username) -> None:
+        """Levanta `UsernameTakenError` se outro usuário já usa esse username."""
+        ...
 
     async def delete(self, user_id: UserId) -> None: ...
 

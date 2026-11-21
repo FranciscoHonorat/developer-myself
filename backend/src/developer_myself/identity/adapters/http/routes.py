@@ -9,19 +9,28 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from developer_myself.identity.application.use_cases import IdentityUseCases
-from developer_myself.identity.domain.model import UserId
+from developer_myself.identity.domain.model import User, UserId
 from developer_myself.shared.adapters.http import LearnerIdDep, http_error
 from developer_myself.shared.settings import Settings
 
 
 class CredentialsIn(BaseModel):
+    """Login: só username + senha (`extra="forbid"`: mandar `email` é 422)."""
+
     model_config = ConfigDict(extra="forbid")
-    email: StrictStr = Field(max_length=254)
+    username: StrictStr = Field(max_length=64)
     password: StrictStr = Field(max_length=256)
 
 
 class RegisterIn(CredentialsIn):
+    email: StrictStr = Field(max_length=254)
     timezone: StrictStr = Field(default="America/Sao_Paulo", max_length=64)
+
+
+class ChangeUsernameIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: StrictStr = Field(max_length=64)
+    password: StrictStr = Field(max_length=256)
 
 
 class PasswordIn(BaseModel):
@@ -33,7 +42,18 @@ class MeOut(BaseModel):
     id: uuid.UUID
     email: str
     created_at: datetime
+    username: str | None = None
     is_admin: bool = False
+
+    @classmethod
+    def of(cls, user: User, uc: IdentityUseCases) -> MeOut:
+        return cls(
+            id=user.id.value,
+            email=user.email.value,
+            created_at=user.created_at,
+            username=user.username.value if user.username else None,
+            is_admin=user.email in uc.admin_emails,
+        )
 
 
 class RegistrationOut(BaseModel):
@@ -66,22 +86,24 @@ async def _login(
 ) -> None:
     client = request.client.host if request.client else "unknown"
     limiter = request.app.state.login_limiter
-    if not limiter.allow(f"ip:{client}") or not limiter.allow(f"email:{body.email.lower()}"):
+    # Mesma normalização do VO `Username`: " Jose " e "jose" contam no mesmo balde.
+    account_key = f"username:{body.username.strip().lower()}"
+    if not limiter.allow(f"ip:{client}") or not limiter.allow(account_key):
         raise http_error(
             status.HTTP_429_TOO_MANY_REQUESTS, "Muitas tentativas. Aguarde.", "RATE_LIMIT"
         )
-    token, _ = await uc.login(body.email, body.password)
-    limiter.reset(f"email:{body.email.lower()}")
+    token, _ = await uc.login(body.username, body.password)
+    limiter.reset(account_key)
     _set_cookie(response, request.app.state.settings, token.raw)
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterIn, request: Request, response: Response, uc: Identity) -> MeOut:
-    user = await uc.register(body.email, body.password)
+    user = await uc.register(body.username, body.email, body.password)
     # Composição entre contextos só por ID: a trilha nasce com o id do usuário.
     await request.app.state.container.learning.create_plan(user.id.value, body.timezone)
     await _login(request, response, uc, body)
-    return MeOut(id=user.id.value, email=user.email.value, created_at=user.created_at)
+    return MeOut.of(user, uc)
 
 
 @router.post("/login", status_code=status.HTTP_204_NO_CONTENT)
@@ -98,13 +120,14 @@ async def logout(request: Request, response: Response, uc: Identity) -> None:
 
 @router.get("/me")
 async def me(learner_id: LearnerIdDep, uc: Identity) -> MeOut:
-    user = await uc.me(UserId(learner_id))
-    return MeOut(
-        id=user.id.value,
-        email=user.email.value,
-        created_at=user.created_at,
-        is_admin=user.email in uc.admin_emails,
-    )
+    return MeOut.of(await uc.me(UserId(learner_id)), uc)
+
+
+@router.put("/username")
+async def change_username(body: ChangeUsernameIn, learner_id: LearnerIdDep, uc: Identity) -> MeOut:
+    """Troca o próprio username (pede a senha). A sessão atual continua válida."""
+    user = await uc.change_username(UserId(learner_id), body.username, body.password)
+    return MeOut.of(user, uc)
 
 
 @router.get("/registration")

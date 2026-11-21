@@ -48,6 +48,7 @@ export function AdminPage() {
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted-foreground">
                 <tr className="border-b">
+                  <th className="px-4 py-2 font-medium">Username</th>
                   <th className="px-4 py-2 font-medium">E-mail</th>
                   <th className="px-4 py-2 font-medium">Cadastro</th>
                   <th className="px-4 py-2 font-medium">Última sessão</th>
@@ -61,6 +62,7 @@ export function AdminPage() {
               <tbody>
                 {items.map((a) => (
                   <tr key={a.id} className="border-b last:border-0">
+                    <td className="px-4 py-2 font-mono text-xs">{a.username ?? "—"}</td>
                     <td className="max-w-56 truncate px-4 py-2 font-medium">{a.email}</td>
                     <td className="px-4 py-2 font-mono text-xs">{date(a.created_at)}</td>
                     <td className="px-4 py-2 font-mono text-xs">{date(a.last_activity_at)}</td>

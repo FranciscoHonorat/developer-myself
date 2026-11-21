@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.support.accounts import handle
 
 from developer_myself.bootstrap import build_memory_container, create_app
 from developer_myself.identity.adapters.memory.repositories import PlainTextHasherForTests
@@ -37,7 +38,12 @@ def client(clock: FakeClock) -> Iterator[TestClient]:
 def register(client: TestClient, email: str = "eu@exemplo.com") -> dict[str, Any]:
     r = client.post(
         "/api/auth/register",
-        json={"email": email, "password": PASSWORD, "timezone": "America/Sao_Paulo"},
+        json={
+            "username": handle(email),
+            "email": email,
+            "password": PASSWORD,
+            "timezone": "America/Sao_Paulo",
+        },
         headers=H,
     )
     assert r.status_code == 201, r.text
@@ -205,7 +211,7 @@ def test_requires_authentication(client: TestClient) -> None:
 
 
 def test_csrf_header_required_on_unsafe_methods(client: TestClient) -> None:
-    r = client.post("/api/auth/login", json={"email": "a@b.com", "password": "x"})
+    r = client.post("/api/auth/login", json={"username": handle("a@b.com"), "password": "x"})
     assert r.status_code == 403
     assert r.json()["code"] == "CSRF"
 
@@ -213,7 +219,11 @@ def test_csrf_header_required_on_unsafe_methods(client: TestClient) -> None:
 def test_cookie_flags(client: TestClient) -> None:
     r = client.post(
         "/api/auth/register",
-        json={"email": "eu@exemplo.com", "password": PASSWORD},
+        json={
+            "username": handle("eu@exemplo.com"),
+            "email": "eu@exemplo.com",
+            "password": PASSWORD,
+        },
         headers=H,
     )
     cookie = r.headers["set-cookie"].lower()
@@ -225,16 +235,22 @@ def test_login_is_generic_and_rate_limited(client: TestClient) -> None:
     register(client)
     client.post("/api/auth/logout", headers=H)
     unknown = client.post(
-        "/api/auth/login", json={"email": "nao@existe.com", "password": PASSWORD}, headers=H
+        "/api/auth/login",
+        json={"username": handle("nao@existe.com"), "password": PASSWORD},
+        headers=H,
     )
     wrong = client.post(
-        "/api/auth/login", json={"email": "eu@exemplo.com", "password": "errada-123456"}, headers=H
+        "/api/auth/login",
+        json={"username": handle("eu@exemplo.com"), "password": "errada-123456"},
+        headers=H,
     )
     assert unknown.status_code == wrong.status_code == 401
     assert unknown.json()["detail"] == wrong.json()["detail"]
     statuses = [
         client.post(
-            "/api/auth/login", json={"email": "eu@exemplo.com", "password": "x"}, headers=H
+            "/api/auth/login",
+            json={"username": handle("eu@exemplo.com"), "password": "x"},
+            headers=H,
         ).status_code
         for _ in range(12)
     ]
@@ -244,7 +260,7 @@ def test_login_is_generic_and_rate_limited(client: TestClient) -> None:
 def test_nosql_injection_payload_is_rejected(client: TestClient) -> None:
     r = client.post(
         "/api/auth/login",
-        json={"email": {"$ne": None}, "password": {"$ne": None}},
+        json={"username": {"$ne": None}, "password": {"$ne": None}},
         headers=H,
     )
     assert r.status_code == 422
@@ -277,21 +293,35 @@ def test_export_and_delete_account(client: TestClient) -> None:
     r = client.post("/api/auth/delete-account", json={"password": PASSWORD}, headers=H)
     assert r.status_code == 204
     r = client.post(
-        "/api/auth/login", json={"email": "eu@exemplo.com", "password": PASSWORD}, headers=H
+        "/api/auth/login",
+        json={"username": handle("eu@exemplo.com"), "password": PASSWORD},
+        headers=H,
     )
     assert r.status_code == 401
 
 
 def test_validation_errors(client: TestClient) -> None:
     r = client.post(
-        "/api/auth/register", json={"email": "invalido", "password": PASSWORD}, headers=H
+        "/api/auth/register",
+        json={"username": handle("invalido"), "email": "invalido", "password": PASSWORD},
+        headers=H,
     )
     assert r.status_code == 422
-    r = client.post("/api/auth/register", json={"email": "a@b.com", "password": "curta"}, headers=H)
+    r = client.post(
+        "/api/auth/register",
+        json={"username": handle("a@b.com"), "email": "a@b.com", "password": "curta"},
+        headers=H,
+    )
     assert r.status_code == 422
     register(client)
     r = client.post(
-        "/api/auth/register", json={"email": "eu@exemplo.com", "password": PASSWORD}, headers=H
+        "/api/auth/register",
+        json={
+            "username": handle("eu@exemplo.com"),
+            "email": "eu@exemplo.com",
+            "password": PASSWORD,
+        },
+        headers=H,
     )
     assert r.status_code == 409
     r = client.put("/api/plan/timezone", json={"timezone": "Marte/Base"}, headers=H)
@@ -393,7 +423,9 @@ def test_competencies(client: TestClient, clock: FakeClock) -> None:
     clock.advance(days=31)  # a sessão de login (14 dias) expira junto: entra de novo
     assert client.get("/api/competencies").status_code == 401
     client.post(
-        "/api/auth/login", json={"email": "eu@exemplo.com", "password": PASSWORD}, headers=H
+        "/api/auth/login",
+        json={"username": handle("eu@exemplo.com"), "password": PASSWORD},
+        headers=H,
     )
     go = next(c for c in client.get("/api/competencies").json()["competencies"] if c["key"] == "go")
     assert go["status"] == "enferrujando"

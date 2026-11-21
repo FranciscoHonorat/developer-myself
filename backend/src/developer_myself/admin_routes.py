@@ -33,6 +33,7 @@ AdminDep = Annotated[UserId, Depends(current_admin)]
 class AccountOut(BaseModel):
     id: uuid.UUID
     email: str
+    username: str | None
     created_at: datetime
     last_activity_at: datetime | None
     contents: int
@@ -64,6 +65,7 @@ async def _overview(request: Request, user: User) -> AccountOut:
     return AccountOut(
         id=learner,
         email=user.email.value,
+        username=user.username.value if user.username else None,
         created_at=user.created_at,
         last_activity_at=latest[0].finished_at if latest else None,
         contents=contents,

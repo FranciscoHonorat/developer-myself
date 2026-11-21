@@ -35,20 +35,28 @@ const METHOD = [
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const location = useLocation();
   const me = useMe();
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [hint, setHint] = useState<string | null>(null);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const isLogin = mode === "login";
   const registration = useRegistrationStatus();
 
   const submit = useAuthCommand(() =>
-    isLogin ? api.login(email, password) : api.register(email, password, timezone),
+    isLogin ? api.login(username, password) : api.register(username, email, password, timezone),
   );
 
   if (me.isSuccess) return <Navigate to={destination(location.state)} replace />;
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
+    // Gerenciador de senha antigo preenche o e-mail salvo: explicar em vez de "senha inválida".
+    if (isLogin && username.includes("@")) {
+      setHint("Use o username (a parte do e-mail antes do @), não o e-mail.");
+      return;
+    }
+    setHint(null);
     submit.mutate(undefined);
   };
 
@@ -68,6 +76,12 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               {isLogin ? "Bom te ver de novo." : "Leva menos de um minuto."}
             </p>
           </div>
+          {isLogin && (
+            <p className="rounded-lg border px-3 py-2 text-sm text-muted-foreground">
+              Agora o login é por username: o seu é a parte do e-mail antes do @ (você pode trocar
+              na página Conta).
+            </p>
+          )}
           {!isLogin && registration.data?.open === false && (
             <p
               role="status"
@@ -78,16 +92,37 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           )}
           <form className="flex flex-col gap-4" onSubmit={onSubmit}>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="email">E-mail</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="email"
-                type="email"
-                autoComplete="email"
+                id="username"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                minLength={3}
+                maxLength={30}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
               />
+              {!isLogin && (
+                <p className="text-xs text-muted-foreground">
+                  De 3 a 30 caracteres: letras minúsculas, números, ponto, _ ou -.
+                </p>
+              )}
             </div>
+            {!isLogin && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="email">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">Senha</Label>
               <Input
@@ -106,12 +141,13 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 </p>
               )}
             </div>
-            {submit.error && (
+            {(hint || submit.error) && (
               <p
                 role="alert"
                 className="rounded-lg border border-destructive/40 px-3 py-2 text-sm text-destructive"
               >
-                {submit.error instanceof ApiError ? submit.error.message : "Falha de conexão."}
+                {hint ??
+                  (submit.error instanceof ApiError ? submit.error.message : "Falha de conexão.")}
               </p>
             )}
             <Button type="submit" size="lg" disabled={submit.isPending}>

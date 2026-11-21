@@ -75,6 +75,7 @@ USER_SCHEMA: Doc = {
     "properties": {
         "_id": _UUID,
         "email": {"bsonType": "string", "maxLength": 254},
+        "username": {"bsonType": "string", "maxLength": 30},
         "password_hash": {"bsonType": "string"},
         "created_at": _DATE,
     },
@@ -134,6 +135,13 @@ async def ensure_schema(db: AsyncDatabase[Doc]) -> None:
     await db.users.create_indexes(
         [
             IndexModel([("email", ASCENDING)], unique=True, name="email_unique"),
+            # Parcial: contas antigas sem o campo não colidem entre si até a migração.
+            IndexModel(
+                [("username", ASCENDING)],
+                unique=True,
+                name="username_unique",
+                partialFilterExpression={"username": {"$type": "string"}},
+            ),
             # Listagem do admin: mais recentes primeiro, com desempate pelo id.
             IndexModel([("created_at", DESCENDING), ("_id", DESCENDING)], name="by_created"),
         ]

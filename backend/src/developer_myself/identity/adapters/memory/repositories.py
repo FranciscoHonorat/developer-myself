@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass, field
 
 from developer_myself.identity.domain.model import (
@@ -7,6 +8,8 @@ from developer_myself.identity.domain.model import (
     User,
     UserCursor,
     UserId,
+    Username,
+    UsernameTakenError,
 )
 
 
@@ -17,7 +20,31 @@ class InMemoryUserRepository:
     async def add(self, user: User) -> None:
         if await self.get_by_email(user.email) is not None:
             raise EmailAlreadyRegisteredError("Não foi possível concluir o cadastro.")
+        if user.username is not None and await self.get_by_username(user.username) is not None:
+            raise UsernameTakenError
         self._users[user.id] = user
+
+    async def get_by_username(self, username: Username) -> User | None:
+        return next((u for u in self._users.values() if u.username == username), None)
+
+    async def without_username(self) -> list[User]:
+        legacy = [u for u in self._users.values() if u.username is None]
+        return sorted(legacy, key=lambda u: (u.created_at, u.id.value))
+
+    async def assign_username_if_missing(self, user_id: UserId, username: Username) -> bool:
+        user = self._users.get(user_id)
+        if user is None or user.username is not None:
+            return False
+        await self.set_username(user_id, username)
+        return True
+
+    async def set_username(self, user_id: UserId, username: Username) -> None:
+        other = await self.get_by_username(username)
+        if other is not None and other.id != user_id:
+            raise UsernameTakenError
+        user = self._users.get(user_id)
+        if user is not None:
+            self._users[user_id] = dataclasses.replace(user, username=username)
 
     async def get_by_email(self, email: Email) -> User | None:
         return next((u for u in self._users.values() if u.email == email), None)

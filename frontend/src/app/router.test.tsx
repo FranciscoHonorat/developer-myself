@@ -101,7 +101,7 @@ describe("rotas e casca", () => {
     fakeApi({ loggedIn: false });
     const router = renderAt("/caderno/c1");
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText("E-mail"), "eu@exemplo.com");
+    await user.type(await screen.findByLabelText("Username"), "eu");
     expect(router.state.location.pathname).toBe("/entrar");
     await user.type(screen.getByLabelText("Senha"), "senha-forte-123");
     await user.click(screen.getByRole("button", { name: "Entrar" }));

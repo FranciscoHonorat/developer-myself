@@ -10,6 +10,7 @@ export interface Me {
   id: string;
   email: string;
   created_at: string;
+  username?: string | null;
   is_admin?: boolean;
 }
 
@@ -17,6 +18,7 @@ export interface Me {
 export interface AdminAccount {
   id: string;
   email: string;
+  username: string | null;
   created_at: string;
   last_activity_at: string | null;
   contents: number;

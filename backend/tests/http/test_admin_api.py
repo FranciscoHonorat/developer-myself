@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from structlog.testing import capture_logs
+from tests.support.accounts import handle
 
 from developer_myself.bootstrap import build_memory_container, create_app
 from developer_myself.identity.adapters.memory.repositories import PlainTextHasherForTests
@@ -50,7 +51,12 @@ def register(client: TestClient, email: str, clock: FakeClock | None = None) -> 
         clock.advance(minutes=1)  # created_at distintos: ordem previsível na listagem
     r = client.post(
         "/api/auth/register",
-        json={"email": email, "password": PASSWORD, "timezone": "America/Sao_Paulo"},
+        json={
+            "username": handle(email),
+            "email": email,
+            "password": PASSWORD,
+            "timezone": "America/Sao_Paulo",
+        },
         headers=H,
     )
     assert r.status_code == 201, r.text
@@ -59,7 +65,9 @@ def register(client: TestClient, email: str, clock: FakeClock | None = None) -> 
 
 def login(client: TestClient, email: str) -> None:
     client.post("/api/auth/logout", headers=H)
-    r = client.post("/api/auth/login", json={"email": email, "password": PASSWORD}, headers=H)
+    r = client.post(
+        "/api/auth/login", json={"username": handle(email), "password": PASSWORD}, headers=H
+    )
     assert r.status_code == 204, r.text
 
 
@@ -118,7 +126,15 @@ def test_list_accounts_shows_counts_not_notes(client: TestClient, clock: FakeClo
     assert aluno["contents"] == 1
     assert aluno["sessions"] == 1
     assert aluno["last_activity_at"] is not None
-    assert set(aluno) == {"id", "email", "created_at", "last_activity_at", "contents", "sessions"}
+    assert set(aluno) == {
+        "id",
+        "email",
+        "username",
+        "created_at",
+        "last_activity_at",
+        "contents",
+        "sessions",
+    }
     for text in NOTES.values():
         assert text not in r.text
 
@@ -145,7 +161,7 @@ def test_list_accounts_rejects_bad_cursor(client: TestClient, cursor: str) -> No
 def test_account_without_plan_lists_zero_contents(client: TestClient) -> None:
     # Cadastro interrompido: existe o usuário, mas a trilha não foi criada.
     container = client.app.state.container  # type: ignore[attr-defined]
-    asyncio.run(container.identity.register("sem-trilha@exemplo.com", PASSWORD))
+    asyncio.run(container.identity.register("sem-trilha", "sem-trilha@exemplo.com", PASSWORD))
     register(client, ADMIN)
     item = next(a for a in accounts(client)["items"] if a["email"] == "sem-trilha@exemplo.com")
     assert item["contents"] == 0
@@ -162,7 +178,9 @@ def test_admin_deletes_account_and_its_data(client: TestClient, clock: FakeClock
     assert [a["email"] for a in accounts(client)["items"]] == [ADMIN]
     client.post("/api/auth/logout", headers=H)
     r = client.post(
-        "/api/auth/login", json={"email": "aluno@exemplo.com", "password": PASSWORD}, headers=H
+        "/api/auth/login",
+        json={"username": handle("aluno@exemplo.com"), "password": PASSWORD},
+        headers=H,
     )
     assert r.status_code == 401
     # Os dados de estudo também se foram: recadastrar começa com a trilha vazia.
@@ -193,7 +211,12 @@ def test_closed_registration_blocks_new_accounts_but_not_admin(client: TestClien
 
     blocked = client.post(
         "/api/auth/register",
-        json={"email": "nova@exemplo.com", "password": PASSWORD, "timezone": "America/Sao_Paulo"},
+        json={
+            "username": handle("nova@exemplo.com"),
+            "email": "nova@exemplo.com",
+            "password": PASSWORD,
+            "timezone": "America/Sao_Paulo",
+        },
         headers=H,
     )
     assert blocked.status_code == 403
@@ -230,7 +253,12 @@ def test_closed_registration_does_not_reveal_existing_admin_email(client: TestCl
     client.post("/api/auth/logout", headers=H)
     r = client.post(
         "/api/auth/register",
-        json={"email": ADMIN, "password": PASSWORD, "timezone": "America/Sao_Paulo"},
+        json={
+            "username": handle(ADMIN),
+            "email": ADMIN,
+            "password": PASSWORD,
+            "timezone": "America/Sao_Paulo",
+        },
         headers=H,
     )
     assert r.status_code == 403
@@ -247,7 +275,7 @@ def test_boot_warns_about_admin_emails_without_account(clock: FakeClock) -> None
         admin_emails=f"{ADMIN},outro-admin@exemplo.com",
     )
     container = build_memory_container(settings, clock=clock, hasher=PlainTextHasherForTests())
-    asyncio.run(container.identity.register(ADMIN, PASSWORD))
+    asyncio.run(container.identity.register(handle(ADMIN), ADMIN, PASSWORD))
     app = create_app(settings, container)  # configura o log; capturar só depois
     with capture_logs() as logs, TestClient(app):
         pass

@@ -11,6 +11,7 @@ afterEach(() => vi.restoreAllMocks());
 const account = (over: Partial<AdminAccount> = {}): AdminAccount => ({
   id: "u2",
   email: "aluno@exemplo.com",
+  username: "aluno",
   created_at: "2026-11-10T10:00:00Z",
   last_activity_at: "2026-11-19T21:00:00Z",
   contents: 4,
@@ -35,7 +36,9 @@ function renderAdmin(routes: Record<string, unknown> = {}) {
 describe("AdminPage", () => {
   it("lista as contas com e-mail e contagens", async () => {
     renderAdmin();
+    expect(await screen.findByRole("columnheader", { name: "Username" })).toBeInTheDocument();
     const row = await screen.findByRole("row", { name: /aluno@exemplo.com/ });
+    expect(within(row).getByRole("cell", { name: "aluno" })).toBeInTheDocument();
     expect(row).toHaveTextContent("4");
     expect(row).toHaveTextContent("12");
   });
