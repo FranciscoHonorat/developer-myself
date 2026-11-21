@@ -8,11 +8,11 @@ import copy
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from developer_myself.insights.adapters.neural.recommender import SpacedRepetitionRule
+from developer_myself.insights.application.recommender import SpacedRepetitionRule
 from developer_myself.learning.domain.content import Content
 from developer_myself.learning.domain.study_plan import StudyPlan
 from developer_myself.learning.domain.value_objects import ContentStatus
-from developer_myself.simulation import day_blocks, morning, play
+from developer_myself.planning.application.simulation import day_blocks, morning, play
 
 MAX_DAYS = 3 * 365
 

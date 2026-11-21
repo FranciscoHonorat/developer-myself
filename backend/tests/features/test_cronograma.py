@@ -4,8 +4,8 @@ from pytest_bdd import parsers, scenarios, then, when
 from tests.features.conftest import World
 
 from developer_myself.curriculum.domain.schedule import DayKind
-from developer_myself.daily_plan import DailyPlan, daily_plan
 from developer_myself.insights.adapters.neural.recommender import load_best_recommender
+from developer_myself.planning.application.daily_plan import DailyPlan, daily_plan
 
 scenarios("cronograma.feature")
 

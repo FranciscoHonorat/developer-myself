@@ -4,7 +4,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from developer_myself.insights.application.recommender import rank
-from developer_myself.review_candidates import review_candidates
+from developer_myself.planning.application.review_candidates import review_candidates
 from developer_myself.shared.adapters.http import LearnerIdDep
 
 router = APIRouter(prefix="/api", tags=["insights"])

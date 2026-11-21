@@ -19,7 +19,6 @@ from developer_myself.insights.adapters.neural.mlp import (
 from developer_myself.insights.adapters.neural.provider import RecommenderProvider
 from developer_myself.insights.adapters.neural.recommender import (
     NeuralReviewRecommender,
-    SpacedRepetitionRule,
     load_best_recommender,
 )
 from developer_myself.insights.adapters.neural.retrain import RetrainJob
@@ -34,7 +33,11 @@ from developer_myself.insights.adapters.neural.training import (
 )
 from developer_myself.insights.application.history import SessionRecord
 from developer_myself.insights.application.model_registry import StoredModel
-from developer_myself.insights.application.recommender import ReviewCandidate, rank
+from developer_myself.insights.application.recommender import (
+    ReviewCandidate,
+    SpacedRepetitionRule,
+    rank,
+)
 from developer_myself.shared.clock import FakeClock
 
 FAST = TrainingConfig(synthetic_samples=600, epochs=8, hidden=6, patience=3)

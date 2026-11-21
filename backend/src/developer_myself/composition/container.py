@@ -11,13 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 
-from developer_myself import (
-    account_routes,
-    admin_routes,
-    competency_routes,
-    recommendation_routes,
-    schedule_routes,
-)
+from developer_myself.accounts.adapters.http import account_routes, admin_routes
 from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.identity.adapters.argon2_hasher import Argon2PasswordHasher
 from developer_myself.identity.adapters.http import routes as identity_routes
@@ -48,6 +42,7 @@ from developer_myself.insights.adapters.neural.provider import RecommenderProvid
 from developer_myself.insights.adapters.neural.recommender import load_best_recommender
 from developer_myself.insights.adapters.neural.retrain import RetrainJob
 from developer_myself.insights.application.history import HistoryQueries, RecordSessionHistory
+from developer_myself.learning.adapters.curriculum.question_picker import RuleQuestionPicker
 from developer_myself.learning.adapters.http import routes as learning_routes
 from developer_myself.learning.adapters.memory.notebook_repository import (
     InMemoryNotebookRepository,
@@ -63,7 +58,11 @@ from developer_myself.learning.domain.errors import (
     StudyPlanNotFoundError,
 )
 from developer_myself.learning.domain.value_objects import LearnerId
-from developer_myself.review_questions import RuleQuestionPicker
+from developer_myself.planning.adapters.http import (
+    competency_routes,
+    recommendation_routes,
+    schedule_routes,
+)
 from developer_myself.shared.adapters.http import (
     RateLimitMiddleware,
     RequestContextMiddleware,
@@ -144,7 +143,7 @@ def build_memory_container(
 async def build_container(settings: Settings) -> Container:
     if settings.storage == "memory":
         return build_memory_container(settings)
-    from developer_myself.mongo_bootstrap import build_mongo_container  # noqa: PLC0415
+    from developer_myself.composition.mongo import build_mongo_container  # noqa: PLC0415
 
     return await build_mongo_container(settings)
 

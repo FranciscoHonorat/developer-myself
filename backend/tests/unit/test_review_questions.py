@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from developer_myself.curriculum.domain.schedule import CatalogEntry, Depth, build_schedule
+from developer_myself.learning.adapters.curriculum.question_picker import RuleQuestionPicker
 from developer_myself.learning.domain.content import Content
 from developer_myself.learning.domain.study_plan import StudyPlan
 from developer_myself.learning.domain.value_objects import (
@@ -13,7 +14,6 @@ from developer_myself.learning.domain.value_objects import (
     Timezone,
     Title,
 )
-from developer_myself.review_questions import RuleQuestionPicker
 
 NOW = datetime(2026, 11, 2, 12, tzinfo=UTC)
 PLAN = StudyPlan.create(LearnerId.new(), Timezone("America/Sao_Paulo"))

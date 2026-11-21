@@ -4,8 +4,8 @@ import pytest
 from pytest_bdd import parsers, scenarios, then, when
 from tests.features.conftest import World
 
-from developer_myself.competency_sheet import competency_sheet
 from developer_myself.curriculum.domain.progression import CompetencyScore, Sheet
+from developer_myself.planning.application.competency_sheet import competency_sheet
 
 scenarios("competencias.feature")
 

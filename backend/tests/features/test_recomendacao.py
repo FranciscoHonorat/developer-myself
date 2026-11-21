@@ -13,7 +13,7 @@ from developer_myself.insights.adapters.neural.recommender import (
 from developer_myself.insights.adapters.neural.retrain import RetrainJob, RetrainReport
 from developer_myself.insights.adapters.neural.training import TrainingConfig
 from developer_myself.insights.application.recommender import Recommendation, rank
-from developer_myself.review_candidates import review_candidates
+from developer_myself.planning.application.review_candidates import review_candidates
 
 scenarios("recomendacao.feature")
 

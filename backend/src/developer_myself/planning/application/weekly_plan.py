@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from developer_myself.curriculum.domain.week import WeekDay
 from developer_myself.insights.application.recommender import ReviewRecommender
 from developer_myself.learning.domain.study_plan import StudyPlan
-from developer_myself.simulation import day_blocks, local_day, morning, play
+from developer_myself.planning.application.simulation import day_blocks, local_day, morning, play
 
 WEEK_DAYS = 7
 

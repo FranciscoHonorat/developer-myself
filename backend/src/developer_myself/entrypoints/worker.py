@@ -1,6 +1,6 @@
 """Processo `worker`: relay do outbox + consumers (ADR-0006, ADR-0010).
 
-Mesma imagem da API, outro comando: `python -m developer_myself.worker`.
+Mesma imagem da API, outro comando: `python -m developer_myself.entrypoints.worker`.
 """
 
 import asyncio
@@ -9,10 +9,10 @@ import signal
 
 import aio_pika
 
+from developer_myself.composition.mongo import build_mongo_container
 from developer_myself.insights.adapters.consumers.session_history import consume_session_history
 from developer_myself.learning.adapters.mongo.outbox_relay import OutboxRelay
 from developer_myself.learning.adapters.rabbitmq.publisher import RabbitPublisher
-from developer_myself.mongo_bootstrap import build_mongo_container
 from developer_myself.shared.adapters.mongo_setup import make_client
 from developer_myself.shared.logging import configure_logging, log
 from developer_myself.shared.settings import Settings

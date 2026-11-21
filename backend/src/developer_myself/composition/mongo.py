@@ -3,7 +3,7 @@
 import uuid
 from datetime import timedelta
 
-from developer_myself.bootstrap import Container
+from developer_myself.composition.container import Container
 from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.identity.adapters.argon2_hasher import Argon2PasswordHasher
 from developer_myself.identity.adapters.mongo.repositories import (
@@ -19,11 +19,11 @@ from developer_myself.insights.adapters.neural.provider import RecommenderProvid
 from developer_myself.insights.adapters.neural.recommender import load_best_recommender
 from developer_myself.insights.adapters.neural.retrain import RetrainJob
 from developer_myself.insights.application.history import HistoryQueries, RecordSessionHistory
+from developer_myself.learning.adapters.curriculum.question_picker import RuleQuestionPicker
 from developer_myself.learning.adapters.mongo.notebook_repository import MongoNotebookRepository
 from developer_myself.learning.adapters.mongo.repository import MongoStudyPlanRepository
 from developer_myself.learning.application.use_cases import LearningUseCases
 from developer_myself.learning.domain.value_objects import LearnerId
-from developer_myself.review_questions import RuleQuestionPicker
 from developer_myself.shared.adapters.mongo_setup import ensure_schema, make_client
 from developer_myself.shared.clock import Clock, SystemClock
 from developer_myself.shared.settings import Settings

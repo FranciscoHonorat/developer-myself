@@ -28,7 +28,7 @@ from developer_myself.learning.domain.value_objects import (
     RecallRating,
     SessionKind,
 )
-from developer_myself.review_candidates import review_candidates
+from developer_myself.planning.application.review_candidates import review_candidates
 
 NOTES = Notes("estudo simulado " * 3, "entendimento simulado " * 2, "revisar simulado " * 2)
 LEVEL_POINTS = {MasteryLevel.INTERMEDIATE: 10, MasteryLevel.ADVANCED: 30}

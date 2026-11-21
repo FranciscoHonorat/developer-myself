@@ -6,10 +6,9 @@
 4. Compara desafiante contra campeão no MESMO conjunto de validação.
 5. Guarda o desafiante sempre; ele só vira o ativo se não for pior.
 
-CLI: `python -m developer_myself.insights.adapters.neural.retrain [--force]`
+CLI: `python -m developer_myself.entrypoints.cli.retrain [--force]`
 """
 
-import argparse
 import asyncio
 import contextlib
 import uuid
@@ -100,24 +99,3 @@ class RetrainJob:
                 log.exception("retrain_failed")
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
-
-
-async def _main(force: bool) -> None:
-    from developer_myself.mongo_bootstrap import build_mongo_container  # noqa: PLC0415
-    from developer_myself.shared.settings import Settings  # noqa: PLC0415
-
-    container = await build_mongo_container(Settings())
-    try:
-        report = await container.retrain_job.run_once(force=force)
-        print(f"status: {report.status} — {report.reason}")
-        print(f"revisões rotuladas: {report.labeled_reviews}")
-        for key, value in report.metrics.items():
-            print(f"  {key}: {value}")
-    finally:
-        await container.close()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Retreina a rede com os rótulos reais.")
-    parser.add_argument("--force", action="store_true", help="retreina mesmo sem rótulos novos")
-    asyncio.run(_main(parser.parse_args().force))

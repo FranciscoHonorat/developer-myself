@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from structlog.testing import capture_logs
 from tests.support.accounts import handle
 
-from developer_myself.bootstrap import build_memory_container, create_app
+from developer_myself.composition.container import build_memory_container, create_app
 from developer_myself.identity.adapters.memory.repositories import PlainTextHasherForTests
 from developer_myself.identity.domain.model import parse_admin_emails
 from developer_myself.learning.domain.errors import StudyPlanNotFoundError

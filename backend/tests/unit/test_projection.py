@@ -13,7 +13,7 @@ from developer_myself.learning.domain.value_objects import (
     Timezone,
     Title,
 )
-from developer_myself.projection import project
+from developer_myself.planning.application.projection import project
 
 TODAY = date(2026, 11, 2)
 

@@ -71,20 +71,20 @@ audit: ## Supply chain: pip-audit + npm audit
 check: lint typecheck test test-web test-int ## Tudo que o CI roda
 
 train: ## Treina a rede neural de recomendação de revisão (gera model.json)
-	$(PY) python -m developer_myself.insights.adapters.neural.train
+	$(PY) python -m developer_myself.entrypoints.cli.train
 
 retrain: ## Retreina AGORA com suas autoavaliações (stack no ar; o worker também faz sozinho)
-	docker compose exec worker python -m developer_myself.insights.adapters.neural.retrain --force
+	docker compose exec worker python -m developer_myself.entrypoints.cli.retrain --force
 
 models: ## Lista os modelos do registro (ativo primeiro) com as métricas principais
 	docker compose exec -T mongo mongosh --quiet developer_myself --eval 'db.ml_models.find({}, {active:1, created_at:1, "payload.metadata.real_samples":1, "payload.metadata.val_log_loss":1, "payload.metadata.promoted":1}).sort({created_at:-1}).limit(10).forEach(printjson)'
 
 schedule-doc: ## Gera Docs/Cronograma de estudos.md a partir da sua trilha (stack no ar)
-	docker compose exec -T api python -m developer_myself.curriculum.adapters.markdown > "Docs/Cronograma de estudos.md"
+	docker compose exec -T api python -m developer_myself.entrypoints.cli.schedule_doc > "Docs/Cronograma de estudos.md"
 	@echo "Gerado: Docs/Cronograma de estudos.md"
 
 backfill-to-review: ## Preenche o "preciso revisar" das matérias a partir do histórico (stack no ar)
-	docker compose exec -T api python -m developer_myself.backfill_to_review
+	docker compose exec -T api python -m developer_myself.entrypoints.cli.backfill_to_review
 
 map-items: ## Re-extrai os itens do PDF do mapa (o teste de cobertura usa) — rode quando o PDF mudar
 	pdftotext -layout "Docs/Mapa de conteúdos Fullstack, AppSec e DevOps.pdf" - \
