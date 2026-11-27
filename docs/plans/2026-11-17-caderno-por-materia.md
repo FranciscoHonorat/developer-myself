@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.15 · FastAPI · pymongo async · pytest-bdd · React 19 · TanStack Query · Vitest · playwright-bdd.
 
-**Spec:** `docs/superpowers/specs/2026-11-17-caderno-por-materia-design.md`
+**Spec:** `docs/specs/2026-11-17-caderno-por-materia-design.md`
 
 ## Global Constraints
 

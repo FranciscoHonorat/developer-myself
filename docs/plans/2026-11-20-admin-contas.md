@@ -11,7 +11,7 @@ Frontend: página `/admin` com TanStack Query.
 
 **Stack:** FastAPI, pymongo async, pytest-bdd (Gherkin pt), React + TanStack Query + Vitest.
 
-**Spec:** `docs/superpowers/specs/2026-11-20-admin-contas-design.md`
+**Spec:** `docs/specs/2026-11-20-admin-contas-design.md`
 
 ## Restrições globais
 - Admin = e-mail em `DM_ADMIN_EMAILS` (separado por vírgula, normalizado como `Email`: trim + minúsculas). Nada no banco.
