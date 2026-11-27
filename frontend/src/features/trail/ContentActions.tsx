@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   CircleCheckBig,
+  Compass,
   Ellipsis,
   NotebookPen,
   Pencil,
@@ -25,6 +26,7 @@ interface Props {
   atMaxLevel: boolean;
   canRemove: boolean;
   onRename: () => void;
+  onEditPurpose: () => void;
   onSchedule: () => void;
   onChallenges: () => void;
   onFinish: () => void;
@@ -43,6 +45,9 @@ export function ContentActions(p: Props) {
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onSelect={p.onRename}>
           <Pencil aria-hidden /> Renomear
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={p.onEditPurpose}>
+          <Compass aria-hidden /> Editar propósito
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={p.onSchedule}>
           <CalendarDays aria-hidden /> Cronograma

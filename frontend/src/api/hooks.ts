@@ -1,7 +1,8 @@
 // TanStack Query: o estado global é o servidor. Cada comando invalida o que mudou.
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { clearAllRecallDrafts } from "@/features/session/RecallTest";
 import { api } from "./client";
-import type { ContentKind, MasteryLevel, NotesInput } from "./types";
+import type { ContentKind, MasteryLevel, NotesInput, RecallAnswer } from "./types";
 
 export const keys = {
   me: ["me"] as const,
@@ -10,6 +11,7 @@ export const keys = {
   stats: ["stats"] as const,
   recommendations: ["recommendations"] as const,
   today: ["today"] as const,
+  warmup: ["warmup"] as const,
   week: ["week"] as const,
   competencies: ["competencies"] as const,
   schedule: (id: string) => ["schedule", id] as const,
@@ -33,6 +35,7 @@ export const useHistory = () =>
 export const useRecommendations = () =>
   useQuery({ queryKey: keys.recommendations, queryFn: api.recommendations });
 export const useToday = () => useQuery({ queryKey: keys.today, queryFn: api.today });
+export const useWarmup = () => useQuery({ queryKey: keys.warmup, queryFn: api.warmup });
 export const useSchedule = (contentId: string, enabled: boolean) =>
   useQuery({ queryKey: keys.schedule(contentId), queryFn: () => api.schedule(contentId), enabled });
 export const useCompetencies = () =>
@@ -44,58 +47,126 @@ export const useNotebook = (contentId: string) =>
 export const useNotebooks = () => useQuery({ queryKey: keys.notebooks, queryFn: api.notebooks });
 export const useStats = () => useQuery({ queryKey: keys.stats, queryFn: () => api.stats() });
 
-function useCommand<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+type InvalidateKey = readonly unknown[];
+
+const ALL_STUDY_KEYS: readonly InvalidateKey[] = [
+  keys.plan,
+  keys.history,
+  keys.stats,
+  keys.recommendations,
+  keys.today,
+  keys.warmup,
+  keys.week,
+  keys.competencies,
+  ["schedule"],
+];
+
+function useCommand<TArgs, TResult>(
+  fn: (args: TArgs) => Promise<TResult>,
+  invalidates: readonly InvalidateKey[] = ALL_STUDY_KEYS,
+) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSettled: () =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: keys.plan }),
-        qc.invalidateQueries({ queryKey: keys.history }),
-        qc.invalidateQueries({ queryKey: keys.stats }),
-        qc.invalidateQueries({ queryKey: keys.recommendations }),
-        qc.invalidateQueries({ queryKey: keys.today }),
-        qc.invalidateQueries({ queryKey: keys.week }),
-        qc.invalidateQueries({ queryKey: keys.competencies }),
-        qc.invalidateQueries({ queryKey: ["schedule"] }),
-      ]),
+    onSettled: () => Promise.all(invalidates.map((queryKey) => qc.invalidateQueries({ queryKey }))),
   });
 }
 
 export const useAddContent = () =>
-  useCommand((a: { title: string; kind: ContentKind }) => api.addContent(a.title, a.kind));
+  useCommand(
+    (a: { title: string; kind: ContentKind; purpose?: string }) =>
+      api.addContent(a.title, a.kind, a.purpose),
+    [keys.plan, keys.today, keys.week, keys.competencies, keys.recommendations, keys.warmup],
+  );
+export const useChangePurpose = () =>
+  useCommand((purpose: string | null) => api.changePurpose(purpose), [keys.plan]);
+export const useChangeContentPurpose = () =>
+  useCommand(
+    (a: { contentId: string; purpose: string | null }) =>
+      api.changeContentPurpose(a.contentId, a.purpose),
+    [keys.plan],
+  );
+export const useReorderQueue = () =>
+  useCommand(
+    (contentIds: string[]) => api.reorderQueue(contentIds),
+    [keys.plan, keys.today, keys.week],
+  );
 export const useFinishContent = () => useCommand((id: string) => api.finishContent(id));
-export const useStartSession = () => useCommand((id: string) => api.startSession(id));
+export const useStartSession = () =>
+  useCommand((id: string) => api.startSession(id), [keys.plan, keys.warmup]);
 export const useFinishSession = () => useCommand((n: NotesInput) => api.finishSession(n));
-export const useCancelSession = () => useCommand(() => api.cancelSession());
+export const useCancelSession = () =>
+  useCommand(() => api.cancelSession(), [keys.plan, keys.warmup, keys.history, keys.stats]);
+export const useStartWarmup = () => useCommand(() => api.startWarmup(), [keys.warmup, keys.plan]);
+export const useFinishWarmup = () =>
+  useCommand(
+    (a: RecallAnswer[]) => api.finishWarmup(a),
+    [keys.warmup, keys.plan, keys.today, keys.history, keys.stats],
+  );
+export const useCancelWarmup = () => useCommand(() => api.cancelWarmup(), [keys.warmup, keys.plan]);
 export const useAddChallenge = () =>
-  useCommand((a: { contentId: string; description: string; level: MasteryLevel }) =>
-    api.addChallenge(a.contentId, a.description, a.level),
+  useCommand(
+    (a: { contentId: string; description: string; level: MasteryLevel }) =>
+      api.addChallenge(a.contentId, a.description, a.level),
+    [keys.plan],
   );
 export const useSolveChallenge = () =>
   useCommand((a: { contentId: string; challengeId: string; evidence: string }) =>
     api.solveChallenge(a.contentId, a.challengeId, a.evidence),
   );
-export const useChangeTimezone = () => useCommand((tz: string) => api.changeTimezone(tz));
+export const useChangeTimezone = () =>
+  useCommand(
+    (tz: string) => api.changeTimezone(tz),
+    [keys.plan, keys.today, keys.week, keys.stats, keys.warmup],
+  );
 
 export function useAuthCommand<TArgs>(fn: (args: TArgs) => Promise<unknown>) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => qc.resetQueries(),
+    onSuccess: () => {
+      clearAllRecallDrafts();
+      return qc.resetQueries();
+    },
   });
 }
 export const useRenameContent = () =>
-  useCommand((a: { contentId: string; title: string }) => api.renameContent(a.contentId, a.title));
-export const useRemoveContent = () => useCommand((id: string) => api.removeContent(id));
+  useCommand(
+    (a: { contentId: string; title: string }) => api.renameContent(a.contentId, a.title),
+    [
+      keys.plan,
+      keys.today,
+      keys.week,
+      keys.competencies,
+      keys.recommendations,
+      keys.warmup,
+      ["schedule"],
+    ],
+  );
+export const useRemoveContent = () =>
+  useCommand(
+    (id: string) => api.removeContent(id),
+    [
+      keys.plan,
+      keys.today,
+      keys.week,
+      keys.competencies,
+      keys.recommendations,
+      keys.warmup,
+      keys.notebooks,
+      ["schedule"],
+    ],
+  );
 export const useChangePreferences = () =>
-  useCommand((p: { minutes: number; restDays: number[] }) =>
-    api.changePreferences(p.minutes, p.restDays),
+  useCommand(
+    (p: { minutes: number; restDays: number[]; maxInProgress?: number }) =>
+      api.changePreferences(p.minutes, p.restDays, p.maxInProgress),
+    [keys.plan, keys.today, keys.week],
   );
 
 // ------------------------------------------------------------------ admin
-export const useRegistrationStatus = () =>
-  useQuery({ queryKey: keys.registration, queryFn: api.registrationStatus });
+export const useRegistrationStatus = (enabled = true) =>
+  useQuery({ queryKey: keys.registration, queryFn: api.registrationStatus, enabled });
 
 export const useAdminAccounts = () =>
   useInfiniteQuery({

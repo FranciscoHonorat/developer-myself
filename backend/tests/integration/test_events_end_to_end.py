@@ -8,7 +8,12 @@ import aio_pika
 import pytest
 from pymongo.asynchronous.database import AsyncDatabase
 from tests.integration.conftest import requires_docker
-from tests.integration.test_study_plan_repository_contract import NOTES, NOW, rich_plan
+from tests.integration.test_study_plan_repository_contract import (
+    NOTES,
+    NOW,
+    rich_plan,
+    warmup_plan,
+)
 
 from developer_myself.insights.adapters.consumers.session_history import consume_session_history
 from developer_myself.insights.adapters.mongo.store import MongoSessionHistoryStore
@@ -16,6 +21,7 @@ from developer_myself.insights.application.history import RecordSessionHistory
 from developer_myself.learning.adapters.mongo.outbox_relay import OutboxRelay
 from developer_myself.learning.adapters.mongo.repository import MongoStudyPlanRepository
 from developer_myself.learning.adapters.rabbitmq.publisher import RabbitPublisher
+from developer_myself.learning.domain.value_objects import RecallAnswer, RecallGrade
 from developer_myself.shared.adapters.mongo_setup import Doc
 
 pytestmark = [pytest.mark.integration, requires_docker]
@@ -108,5 +114,34 @@ async def test_poison_message_goes_to_dlq(rabbit_url: str) -> None:
             return message.body == b"isto nao e json"
 
         await wait_for(in_dlq)
+    finally:
+        await connection.close()
+
+
+async def test_finished_warmup_reaches_history(
+    mongo_db: AsyncDatabase[Doc], rabbit_url: str
+) -> None:
+    repo = MongoStudyPlanRepository(mongo_db.study_plans)
+    store = MongoSessionHistoryStore(mongo_db.study_sessions, mongo_db.processed_events)
+    plan = warmup_plan()
+    warmup = plan.active_warmup
+    assert warmup is not None
+    answers = tuple(RecallAnswer(q.id, "lembrei", RecallGrade.RECALLED) for q in warmup.questions)
+    plan.finish_warmup(answers, warmup.started_at + timedelta(minutes=2))
+    await repo.save(plan)
+
+    connection = await aio_pika.connect_robust(rabbit_url)
+    try:
+        await consume_session_history(connection, RecordSessionHistory(store))
+        publisher = await RabbitPublisher.create(connection)
+        await OutboxRelay(mongo_db.study_plans, publisher.publish).run_once()
+
+        async def warmup_recorded() -> bool:
+            return await mongo_db.study_sessions.count_documents({"kind": "WARMUP"}) == 1
+
+        await wait_for(warmup_recorded)
+        records = await store.list_for(str(plan.id), 10)
+        (record,) = [r for r in records if r.kind == "WARMUP"]
+        assert len(record.recall_test) == 2
     finally:
         await connection.close()

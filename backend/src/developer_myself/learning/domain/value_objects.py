@@ -53,6 +53,9 @@ class ChallengeId:
 
 
 TITLE_MAX_LENGTH = 200
+PURPOSE_MAX_LENGTH = 300
+MIN_PARALLEL_CONTENTS = 1
+MAX_PARALLEL_CONTENTS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +68,26 @@ class Title:
             raise InvalidValueError("O título não pode ser vazio.")
         if len(cleaned) > TITLE_MAX_LENGTH:
             raise InvalidValueError(f"O título deve ter no máximo {TITLE_MAX_LENGTH} caracteres.")
+        object.__setattr__(self, "value", cleaned)
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class Purpose:
+    """Motivo / norte pessoal do aprendiz (SDT: pilar de Propósito)."""
+
+    value: str
+
+    def __post_init__(self) -> None:
+        cleaned = self.value.strip()
+        if not cleaned:
+            raise InvalidValueError("O propósito não pode ser vazio.")
+        if len(cleaned) > PURPOSE_MAX_LENGTH:
+            raise InvalidValueError(
+                f"O propósito deve ter no máximo {PURPOSE_MAX_LENGTH} caracteres."
+            )
         object.__setattr__(self, "value", cleaned)
 
     def __str__(self) -> str:
@@ -122,7 +145,7 @@ class QuestionSource(StrEnum):
     TO_REVIEW = "TO_REVIEW"
     SPACED_TOPIC = "SPACED_TOPIC"
     TOPIC = "TOPIC"
-    LEARNER = "LEARNER"  # reservada: perguntas escritas no caderno (etapa 2)
+    LEARNER = "LEARNER"  # escrita pelo aprendiz para o "eu do futuro"
 
 
 class RecallGrade(StrEnum):
@@ -144,6 +167,7 @@ class RecallQuestion:
     source: QuestionSource
     template: str
     topic: str | None = None
+    expected_answer: str | None = None  # só nas perguntas do aprendiz (LEARNER)
 
     def __post_init__(self) -> None:
         if not self.text.strip():
@@ -152,6 +176,31 @@ class RecallQuestion:
             raise InvalidValueError(f"A pergunta aceita até {QUESTION_MAX_LENGTH} caracteres.")
         if self.topic is not None and len(self.topic) > QUESTION_MAX_LENGTH:
             raise InvalidValueError(f"O tópico aceita até {QUESTION_MAX_LENGTH} caracteres.")
+
+
+LEARNER_ANSWER_MAX_LENGTH = 2_000
+
+
+@dataclass(frozen=True, slots=True)
+class LearnerQuestion:
+    """Pergunta que o aprendiz deixa para o "eu do futuro" no fim de um estudo."""
+
+    id: uuid.UUID
+    text: str
+    created_at: datetime
+    answer: str | None = None  # resposta esperada, opcional
+
+    def __post_init__(self) -> None:
+        if not self.text.strip():
+            raise InvalidValueError("A pergunta não pode ser vazia.")
+        if len(self.text) > QUESTION_MAX_LENGTH:
+            raise InvalidValueError(f"A pergunta aceita até {QUESTION_MAX_LENGTH} caracteres.")
+        if self.answer is not None and not self.answer.strip():
+            object.__setattr__(self, "answer", None)
+        elif self.answer is not None and len(self.answer) > LEARNER_ANSWER_MAX_LENGTH:
+            raise InvalidValueError(
+                f"A resposta esperada aceita até {LEARNER_ANSWER_MAX_LENGTH} caracteres."
+            )
 
 
 @dataclass(frozen=True, slots=True)

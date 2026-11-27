@@ -10,7 +10,9 @@ from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
-HISTORY_EVENT_TYPES = frozenset({"study_session_finished", "study_session_abandoned"})
+HISTORY_EVENT_TYPES = frozenset(
+    {"study_session_finished", "study_session_abandoned", "warmup_finished"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +87,25 @@ class SessionRecord:
                 last_recall_rating_before=p.get("last_recall_rating_before"),
                 recall_test=p.get("recall_test", []),
             )
+        if envelope["type"] == "warmup_finished":
+            return cls(
+                event_id=envelope["event_id"],
+                learner_id=envelope["learner_id"],
+                type=envelope["type"],
+                content_id=p["content_id"],
+                content_title=p["content_title"],
+                kind="WARMUP",
+                started_at=started,
+                finished_at=datetime.fromisoformat(p["finished_at"]),
+                duration_seconds=p["duration_seconds"],
+                awarded=False,
+                reason=None,
+                notes_studied="",
+                notes_understood="",
+                notes_to_review="",
+                level_after=None,
+                recall_test=p.get("recall_test", []),
+            )
         occurred = datetime.fromisoformat(envelope["occurred_at"])
         return cls(
             event_id=envelope["event_id"],
@@ -128,6 +149,12 @@ class HistoryPage:
     next: HistoryCursor | None
 
 
+@dataclass(frozen=True, slots=True)
+class LearnerHistorySummary:
+    sessions: int
+    last_activity_at: datetime | None
+
+
 class SessionHistoryStore(Protocol):
     async def record(self, record: SessionRecord) -> bool:
         """Grava de forma idempotente (chave = event_id). Retorna False se já existia."""
@@ -144,6 +171,10 @@ class SessionHistoryStore(Protocol):
         ...
 
     async def count_for(self, learner_id: str) -> int: ...
+
+    async def summaries_for(self, learner_ids: list[str]) -> dict[str, LearnerHistorySummary]:
+        """Contagem e data da última sessão em lote (evita N+1 no admin)."""
+        ...
 
     async def delete_for(self, learner_id: str) -> None: ...
 
@@ -180,6 +211,10 @@ class Stats:
     current_streak_days: int
     withheld_by_reason: dict[str, int]
     daily: list[DailyStat]
+    recall_questions_total: int = 0
+    recall_questions_recalled: int = 0
+    recall_questions_partial: int = 0
+    recall_accuracy: float | None = None
 
 
 @dataclass(slots=True)
@@ -202,8 +237,9 @@ class HistoryQueries:
         self, learner_id: uuid.UUID, timezone: str, now: datetime, days: int = 30
     ) -> Stats:
         tz = ZoneInfo(timezone)
+        # +1 dia de folga na busca em UTC para nunca cortar o início do primeiro dia local.
         records = await self.store.list_for(
-            str(learner_id), limit=5_000, since=now - timedelta(days=days)
+            str(learner_id), limit=5_000, since=now - timedelta(days=days + 1)
         )
         finished = [r for r in records if r.type == "study_session_finished"]
         by_day: dict[date, list[SessionRecord]] = {}
@@ -226,6 +262,15 @@ class HistoryQueries:
             elif stat.day != today:
                 break
         withheld = Counter(r.reason for r in records if r.reason)
+        recall_items = [item for r in records for item in r.recall_test]
+        recall_total = len(recall_items)
+        recall_recalled = sum(1 for item in recall_items if item.get("grade") == "RECALLED")
+        recall_partial = sum(1 for item in recall_items if item.get("grade") == "PARTIAL")
+        recall_accuracy = (
+            round(((recall_recalled + 0.5 * recall_partial) / recall_total) * 100, 1)
+            if recall_total > 0
+            else None
+        )
         return Stats(
             total_sessions=len(finished),
             total_points=sum(1 for r in finished if r.awarded),
@@ -233,4 +278,8 @@ class HistoryQueries:
             current_streak_days=streak,
             withheld_by_reason=dict(withheld),
             daily=daily,
+            recall_questions_total=recall_total,
+            recall_questions_recalled=recall_recalled,
+            recall_questions_partial=recall_partial,
+            recall_accuracy=recall_accuracy,
         )

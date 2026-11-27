@@ -40,10 +40,10 @@ Funcionalidade: Estudar até 3 conteúdos em paralelo
       Dado que "Linux" está em andamento com 10 pontos
       E que "Learning Go" está em andamento
       E que "SAST/DAST/SCA" está em andamento
-      E que "Conversação em Inglês" está bloqueado
+      E que "Conversas Cruciais" está bloqueado
       E que "Conversação em Espanhol" está bloqueado
       Quando eu resolvo 3 desafios de Intermediário em "Linux"
-      Então "Conversação em Inglês" fica em andamento
+      Então "Conversas Cruciais" fica em andamento
       E "Conversação em Espanhol" continua bloqueado
 
     Cenário: Concluir um conteúdo já consolidado não abre vaga nova
@@ -54,3 +54,32 @@ Funcionalidade: Estudar até 3 conteúdos em paralelo
       Quando eu concluo "Learning Go"
       Então "Learning Go" fica concluído
       E "Redes" continua bloqueado
+
+  Regra: Inglês é hábito diário: fica em andamento sem ocupar uma das 3 vagas
+
+    Cenário: Inglês entra em andamento mesmo com as 3 vagas ocupadas
+      Dado que "Linux" está em andamento
+      E que "Learning Go" está em andamento
+      E que "SAST/DAST/SCA" está em andamento
+      Quando eu adiciono "Conversação em Inglês"
+      Então "Conversação em Inglês" fica em andamento
+      E "Linux" fica em andamento
+      E "Learning Go" fica em andamento
+      E "SAST/DAST/SCA" fica em andamento
+
+    Cenário: Inglês não tira a vaga de outro conteúdo
+      Dado que "Conversação em Inglês" está em andamento
+      Quando eu adiciono "Linux"
+      E eu adiciono "Learning Go"
+      E eu adiciono "SAST/DAST/SCA"
+      E eu adiciono "Docker"
+      Então "Linux" fica em andamento
+      E "Learning Go" fica em andamento
+      E "SAST/DAST/SCA" fica em andamento
+      E "Docker" fica bloqueado
+      E sou avisado de que "Docker" espera uma vaga entre os 3 em andamento
+
+    Cenário: Inglês continua todo dia depois de chegar a Intermediário
+      Dado que "Conversação em Inglês" está em andamento com 10 pontos
+      Quando eu resolvo 3 desafios de Intermediário em "Conversação em Inglês"
+      Então "Conversação em Inglês" fica em andamento

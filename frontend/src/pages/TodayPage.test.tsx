@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CompetencySheet, Plan, Stats, Today } from "../api/types";
+import type { CompetencySheet, Plan, Stats, Today, WarmupStatus } from "../api/types";
 import { makeBlock, makePlan, makeToday, makeTodayItem } from "../test/fixtures";
 import { callTo, jsonResponse, makeContent, renderWithClient, routeFetch } from "../test/render";
 import { TodayPage } from "./TodayPage";
@@ -41,8 +41,19 @@ const contents = [
   makeContent({ id: "c2", title: "Go" }),
 ];
 
-function renderToday(opts: { plan?: Plan; today?: Today; sheet?: CompetencySheet } = {}) {
+const noWarmup: WarmupStatus = { available: false, done_today: false, content: null, active: null };
+const warmupReady: WarmupStatus = {
+  available: true,
+  done_today: false,
+  content: { id: "c2", title: "Go" },
+  active: null,
+};
+
+function renderToday(
+  opts: { plan?: Plan; today?: Today; sheet?: CompetencySheet; warmup?: WarmupStatus } = {},
+) {
   const fetchMock = routeFetch({
+    "/warmup": opts.warmup ?? noWarmup,
     "/plan": opts.plan ?? makePlan({ contents, needs_review_today: true }),
     "/today": opts.today ?? today,
     "/stats?days=30": stats,
@@ -111,6 +122,33 @@ describe("TodayPage", () => {
     await waitFor(() => expect(callTo(fetchMock, "/sessions")).toBeDefined());
     const body = JSON.parse(String(callTo(fetchMock, "/sessions")?.[1]?.body));
     expect(body).toEqual({ content_id: "c1" });
+  });
+
+  it("o aquecimento aparece acima do Próximo passo", async () => {
+    renderToday({ warmup: warmupReady });
+    const warmup = await screen.findByText("🔥 Aquecimento · 2 perguntas · ~2 min");
+    const next = await screen.findByRole("button", { name: "Iniciar revisão" });
+    expect(warmup.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("com sessão ativa o aquecimento não aparece", async () => {
+    renderToday({
+      warmup: warmupReady,
+      plan: makePlan({
+        contents,
+        active_session: {
+          content_id: "c1",
+          content_title: "Clean Code",
+          kind: "REVIEW",
+          started_at: "2026-11-20T12:50:00Z",
+          expires_at: "2026-11-20T16:50:00Z",
+          questions: [],
+          last_to_review: null,
+        },
+      }),
+    });
+    expect(await screen.findByRole("heading", { name: /Revisão: Clean Code/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Aquecimento/)).not.toBeInTheDocument();
   });
 
   it("o resto do dia lista os blocos com estado", async () => {
@@ -188,6 +226,7 @@ describe("TodayPage", () => {
       if (path.endsWith("/plan/preferences")) return jsonResponse(null, 204);
       if (path.includes("/stats")) return jsonResponse(stats);
       if (path.endsWith("/competencies")) return jsonResponse(sheet());
+      if (path.endsWith("/warmup")) return jsonResponse(noWarmup);
       return jsonResponse({
         minutes_per_day: 210,
         rest_days: [],
@@ -218,5 +257,30 @@ describe("TodayPage", () => {
       screen.queryByRole("heading", { name: "Adicione seu primeiro conteúdo" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Nada planejado para hoje")).toBeInTheDocument();
+  });
+
+  it("SDT: exibe propósito do plano e permite escolher outro foco do dia", async () => {
+    renderToday({
+      plan: makePlan({
+        purpose: "Dominar arquitetura distribuída",
+        contents: [
+          makeContent({
+            id: "c1",
+            title: "Clean Code",
+            status: "CONSOLIDATED",
+            purpose: "Escrever código legível",
+          }),
+          makeContent({ id: "c2", title: "Go", purpose: "Serviços concorrentes" }),
+        ],
+        needs_review_today: true,
+      }),
+    });
+    expect(await screen.findByText("Dominar arquitetura distribuída")).toBeInTheDocument();
+    expect(screen.getByText("Escrever código legível")).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "estudo · Go" }));
+    expect(screen.getByRole("heading", { name: "Go" })).toBeInTheDocument();
+    expect(screen.getByText("Serviços concorrentes")).toBeInTheDocument();
   });
 });

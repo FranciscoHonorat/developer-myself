@@ -57,6 +57,18 @@ class RecallTestRequiredError(InvalidValueError):
     """Revisão com teste de memória só finaliza com as perguntas respondidas e corrigidas."""
 
 
+class WarmupAlreadyDoneError(DomainError):
+    """O aquecimento é um por dia (dia local)."""
+
+
+class NoActiveWarmupError(DomainError):
+    """Não há aquecimento em andamento (nunca começou, foi concluído ou expirou)."""
+
+
+class NothingToWarmUpError(InvalidValueError):
+    """Só aquece conteúdo com sessão possível e pelo menos 1 sessão finalizada."""
+
+
 class ContentHasProgressError(DomainError):
     """Remover apagaria histórico de pontos, sessões ou desafios: não é permitido."""
 

@@ -49,3 +49,16 @@ Funcionalidade: Teste de memória na revisão
     E que iniciei uma sessão em "Clean Code"
     Quando eu finalizo a revisão 25 minutos depois errando todas
     Então o histórico registra 3 perguntas com as minhas correções
+
+  Cenário: A pergunta do eu do futuro entra na revisão
+    Dado que "Clean Code" está consolidado
+    E que deixei para "Clean Code" a pergunta "O que é CQS?"
+    Quando eu inicio uma sessão em "Clean Code"
+    Então a 1ª pergunta é "O que é CQS?"
+
+  Cenário: A pergunta usada na revisão sai da fila
+    Dado que "Clean Code" está consolidado
+    E que deixei para "Clean Code" a pergunta "O que é CQS?"
+    E que iniciei uma sessão em "Clean Code"
+    Quando eu finalizo a revisão 25 minutos depois errando todas
+    Então "Clean Code" não tem perguntas do eu do futuro

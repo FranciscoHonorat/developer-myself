@@ -44,3 +44,10 @@ class InMemoryStudyPlanRepository:
 
     async def delete(self, learner_id: LearnerId) -> None:
         self._plans.pop(learner_id, None)
+
+    async def content_counts(self, learner_ids: list[LearnerId]) -> dict[LearnerId, int]:
+        return {
+            lid: len(plan.contents)
+            for lid in learner_ids
+            if (plan := self._plans.get(lid)) is not None
+        }

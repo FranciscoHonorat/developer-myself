@@ -67,4 +67,33 @@ describe("OutcomeDialog", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Continuar" }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("SDT: exibe evolução de maestria, desempenho no teste e dica de zona de desafio", () => {
+    renderWithClient(
+      <OutcomeDialog
+        onClose={vi.fn()}
+        outcome={{
+          content_id: "c1",
+          kind: "REVIEW",
+          duration_seconds: 1500,
+          awarded: true,
+          reason: null,
+          total_points: 16,
+          level: "INTERMEDIATE",
+          level_before: "BEGINNER",
+          next_level: "ADVANCED",
+          points_for_next_level: 30,
+          challenges_solved: 1,
+          challenges_for_next_level: 3,
+          recall_recalled: 2,
+          recall_total: 3,
+          unlocked_content_id: null,
+        }}
+      />,
+    );
+    expect(screen.getByText(/Novo nível alcançado: Intermediário/)).toBeInTheDocument();
+    expect(screen.getByText(/Teste de memória: 2\/3 acertadas sem consultar/)).toBeInTheDocument();
+    expect(screen.getByText(/16\/30 pts/)).toBeInTheDocument();
+    expect(screen.getByText(/Zona de desafio/)).toBeInTheDocument();
+  });
 });

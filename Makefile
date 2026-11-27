@@ -42,7 +42,7 @@ test: test-unit test-bdd test-http test-arch ## Testes rápidos (sem Docker)
 
 test-unit: ## Unitários do domínio, com gate de 100% de branches
 	$(PY) pytest tests/unit tests/features -q \
-	  --cov=developer_myself.learning.domain --cov=developer_myself.curriculum.domain --cov-branch --cov-report=term-missing:skip-covered \
+	  --cov=developer_myself.learning.domain --cov=developer_myself.curriculum.domain --cov=developer_myself.identity.domain --cov-branch --cov-report=term-missing:skip-covered \
 	  --cov-fail-under=100
 
 test-bdd: ## Cenários Gherkin (pt) via casos de uso
@@ -92,7 +92,8 @@ map-items: ## Re-extrai os itens do PDF do mapa (o teste de cobertura usa) — r
 	@echo "Itens: $$(wc -l < backend/tests/fixtures/mapa_itens.txt). Rode: make test-unit"
 
 up: ## Sobe tudo com Docker Compose (http://localhost:8000)
-	@test -f .env || (cp .env.example .env && echo "Criei .env a partir de .env.example — troque a senha do RabbitMQ.")
+	@if [ ! -f .env ]; then cp .env.example .env && chmod 600 .env && echo "Criei .env a partir de .env.example — troque RABBITMQ_PASSWORD e rode make up novamente." && exit 1; fi
+	@if grep -qE '^RABBITMQ_PASSWORD=troque-esta-senha[[:space:]]*$$' .env; then echo "Troque RABBITMQ_PASSWORD em .env antes de subir." && exit 1; fi
 	docker compose up -d --build
 	@echo "Pronto: http://localhost:8000  (RabbitMQ: http://localhost:15672)"
 

@@ -79,3 +79,16 @@ async def test_pages_walk_newest_first_breaking_ties_by_event_id(
 async def test_page_after_the_last_item_is_empty(store: SessionHistoryStore) -> None:
     await store.record(record("a", 0))
     assert await ids(store, 5, HistoryCursor(NOW, "a")) == []
+
+
+async def test_summaries_for_batches_counts_and_last_activity(store: SessionHistoryStore) -> None:
+    await store.record(record("a", 5, learner=ME))
+    await store.record(record("b", 20, learner=ME))
+    await store.record(record("c", 10, learner=OTHER))
+    summaries = await store.summaries_for([ME, OTHER, str(uuid.uuid7())])
+    assert summaries[ME].sessions == 2
+    assert summaries[ME].last_activity_at == NOW + timedelta(minutes=20)
+    assert summaries[OTHER].sessions == 1
+    assert summaries[OTHER].last_activity_at == NOW + timedelta(minutes=10)
+    assert len(summaries) == 2
+    assert await store.summaries_for([]) == {}

@@ -54,6 +54,20 @@ describe("AccountPage", () => {
     await waitFor(() => expect(callTo(fetchMock, "/auth/delete-account")).toBeDefined());
   });
 
+  it("sair limpa rascunhos locais de teste de memória e aquecimento", async () => {
+    localStorage.setItem("recall:2026-11-20T10:00:00Z", '{"step":"answer"}');
+    localStorage.setItem("warmup:2026-11-20T10:00:00Z", '{"step":"answer"}');
+    localStorage.setItem("dm-theme", "dark");
+    renderAccount();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Sair/ }));
+    await waitFor(() => {
+      expect(localStorage.getItem("recall:2026-11-20T10:00:00Z")).toBeNull();
+      expect(localStorage.getItem("warmup:2026-11-20T10:00:00Z")).toBeNull();
+    });
+    expect(localStorage.getItem("dm-theme")).toBe("dark");
+  });
+
   describe("username", () => {
     it("mostra o atual e troca pedindo a senha", async () => {
       const fetchMock = renderAccount();
@@ -85,6 +99,19 @@ describe("AccountPage", () => {
       await user.type(within(card).getByLabelText("Senha atual"), PASSWORD);
       await user.click(within(card).getByRole("button", { name: "Trocar username" }));
       expect(await within(card).findByText("Este username já está em uso.")).toBeInTheDocument();
+    });
+  });
+
+  it("salva propósito geral de estudo via PUT /plan/purpose", async () => {
+    const fetchMock = renderAccount();
+    const user = userEvent.setup();
+    const card = await screen.findByRole("region", { name: "Propósito de estudo" });
+    await user.type(within(card).getByLabelText("Seu propósito"), "Construir sistemas seguros");
+    await user.click(within(card).getByRole("button", { name: "Salvar propósito" }));
+    await waitFor(() => {
+      const call = callTo(fetchMock, "/plan/purpose");
+      expect(call?.[1]?.method).toBe("PUT");
+      expect(call?.[1]?.body).toBe(JSON.stringify({ purpose: "Construir sistemas seguros" }));
     });
   });
 });

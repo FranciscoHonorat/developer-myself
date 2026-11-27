@@ -97,7 +97,7 @@ def test_review_session_exposes_three_questions(client: TestClient, clock: FakeC
     start_review(client, clock)
     active = client.get("/api/plan").json()["active_session"]
     assert len(active["questions"]) == 3
-    assert set(active["questions"][0]) == {"id", "text", "source"}
+    assert set(active["questions"][0]) == {"id", "text", "source", "expected_answer"}
     assert active["last_to_review"] == NOTES["to_review"]
     assert client.get("/api/plan").json()["contents"][0]["last_to_review"] == NOTES["to_review"]
 
@@ -288,6 +288,7 @@ def test_export_and_delete_account(client: TestClient) -> None:
     add_content(client, "Clean Code")
     data = client.get("/api/export").json()
     assert data["account"]["email"] == "eu@exemplo.com"
+    assert data["account"]["username"] == handle("eu@exemplo.com")
     assert data["plan"]["contents"][0]["title"] == "Clean Code"
 
     r = client.post("/api/auth/delete-account", json={"password": PASSWORD}, headers=H)
@@ -596,3 +597,196 @@ def test_history_rejects_a_tampered_cursor(client: TestClient, cursor: str) -> N
 def test_history_page_size_is_bounded(client: TestClient) -> None:
     register(client)
     assert client.get("/api/history", params={"limit": 101}).status_code == 422
+
+
+def test_english_is_a_daily_habit_outside_the_slots(client: TestClient) -> None:
+    register(client)
+    for title in ("Linux", "Learning Go", "SAST/DAST/SCA", "Conversação em Inglês"):
+        add_content(client, title)
+    contents = {c["title"]: c for c in client.get("/api/plan").json()["contents"]}
+    assert contents["Conversação em Inglês"]["status"] == "IN_PROGRESS"
+    assert contents["Conversação em Inglês"]["daily"] is True
+    assert contents["Linux"]["daily"] is False
+
+    r = client.put(
+        "/api/plan/preferences", json={"minutes_per_day": 480, "rest_days": []}, headers=H
+    )
+    assert r.status_code == 204
+    for day in client.get("/api/week").json()["days"]:
+        assert day["minutes"] == 480
+        english = [b for b in day["blocks"] if b["title"] == "Conversação em Inglês"]
+        assert sum(b["pomodoros"] for b in english) == 2
+
+
+def test_security_headers_and_docs_disabled_by_default(client: TestClient) -> None:
+    r = client.get("/healthz")
+    assert "default-src 'self'" in r.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" in r.headers["content-security-policy"]
+    assert "camera=()" in r.headers["permissions-policy"]
+    assert "strict-transport-security" not in r.headers  # cookie_secure=False no fixture
+    assert client.get("/docs").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
+
+
+def test_hsts_enabled_when_cookie_secure_is_true() -> None:
+    settings = Settings(storage="memory", cookie_secure=True, log_json=False, log_level="WARNING")
+    container = build_memory_container(
+        settings, clock=FakeClock(), hasher=PlainTextHasherForTests()
+    )
+    with TestClient(create_app(settings, container)) as secure_client:
+        r = secure_client.get("/healthz")
+        assert "max-age=31536000" in r.headers["strict-transport-security"]
+
+
+def test_correlation_id_is_sanitized(client: TestClient) -> None:
+    ok = client.get("/healthz", headers={"X-Correlation-ID": "req-123.abc_9"})
+    assert ok.headers["x-correlation-id"] == "req-123.abc_9"
+
+    bad = client.get("/healthz", headers={"X-Correlation-ID": "bad value / " + "x" * 100})
+    assert bad.headers["x-correlation-id"] != "bad value / " + "x" * 100
+    assert len(bad.headers["x-correlation-id"]) <= 64
+
+
+def test_oversized_request_body_returns_413() -> None:
+    settings = Settings(
+        storage="memory",
+        cookie_secure=False,
+        log_json=False,
+        log_level="WARNING",
+        max_request_body_bytes=128,
+    )
+    container = build_memory_container(
+        settings, clock=FakeClock(), hasher=PlainTextHasherForTests()
+    )
+    with TestClient(create_app(settings, container)) as small_client:
+        r = small_client.post("/api/auth/login", content=b"x" * 256, headers=H)
+        assert r.status_code == 413
+        assert r.json()["code"] == "PAYLOAD_TOO_LARGE"
+
+
+def test_register_with_invalid_timezone_does_not_create_orphan_user(client: TestClient) -> None:
+    r = client.post(
+        "/api/auth/register",
+        json={
+            "username": "orfao",
+            "email": "orfao@exemplo.com",
+            "password": PASSWORD,
+            "timezone": "Marte/Base",
+        },
+        headers=H,
+    )
+    assert r.status_code == 422
+    # Se não criou usuário órfão, registrar de novo com timezone válido funciona.
+    ok = client.post(
+        "/api/auth/register",
+        json={
+            "username": "orfao",
+            "email": "orfao@exemplo.com",
+            "password": PASSWORD,
+            "timezone": "America/Sao_Paulo",
+        },
+        headers=H,
+    )
+    assert ok.status_code == 201
+
+
+def test_delete_account_keeps_session_if_erase_fails(client: TestClient) -> None:
+    register(client)
+    container = client.app.state.container  # type: ignore[attr-defined]
+    real_erase = container.erase_learner_data
+
+    async def broken_erase(_: Any) -> None:
+        raise ConnectionError("falha transitória")
+
+    container.erase_learner_data = broken_erase
+    with pytest.raises(ConnectionError):
+        client.post("/api/auth/delete-account", json={"password": PASSWORD}, headers=H)
+    container.erase_learner_data = real_erase
+
+    # Sessão continua ativa para o usuário repetir a exclusão e concluir o apagamento.
+    assert client.get("/api/auth/me").status_code == 200
+    assert (
+        client.post("/api/auth/delete-account", json={"password": PASSWORD}, headers=H).status_code
+        == 204
+    )
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_sdt_purpose_autonomy_and_competence_stats(client: TestClient, clock: FakeClock) -> None:
+    register(client)
+    # Propósito geral do plano
+    r = client.put("/api/plan/purpose", json={"purpose": "Liderar sistemas resilientes"}, headers=H)
+    assert r.status_code == 204
+    assert client.get("/api/plan").json()["purpose"] == "Liderar sistemas resilientes"
+
+    # Autonomia: configurar 1 conteúdo em paralelo
+    r = client.put(
+        "/api/plan/preferences",
+        json={"minutes_per_day": 180, "rest_days": [], "max_in_progress": 1},
+        headers=H,
+    )
+    assert r.status_code == 204
+    assert client.get("/api/plan").json()["max_in_progress"] == 1
+
+    # Propósito por conteúdo na criação e edição
+    c1 = client.post(
+        "/api/contents",
+        json={"title": "Linux", "kind": "BOOK", "purpose": "Dominar troubleshooting"},
+        headers=H,
+    ).json()
+    c2 = client.post(
+        "/api/contents", json={"title": "Learning Go", "kind": "BOOK"}, headers=H
+    ).json()
+    assert c1["purpose"] == "Dominar troubleshooting"
+    assert c2["status"] == "LOCKED"
+
+    # Aumentar autonomia para 2 vagas desbloqueia o segundo conteúdo
+    assert (
+        client.put(
+            "/api/plan/preferences",
+            json={"minutes_per_day": 180, "rest_days": [], "max_in_progress": 2},
+            headers=H,
+        ).status_code
+        == 204
+    )
+    by_id = {c["id"]: c for c in client.get("/api/plan").json()["contents"]}
+    assert by_id[c2["id"]]["status"] == "IN_PROGRESS"
+
+    # Editar propósito de um conteúdo e vê-lo na sessão ativa
+    assert (
+        client.put(
+            f"/api/contents/{c1['id']}/purpose",
+            json={"purpose": "Operar servidores com segurança"},
+            headers=H,
+        ).status_code
+        == 204
+    )
+    client.post("/api/sessions", json={"content_id": c1["id"]}, headers=H)
+    active = client.get("/api/plan").json()["active_session"]
+    assert active["content_purpose"] == "Operar servidores com segurança"
+
+    # Competência: outcome traz progresso rumo ao próximo nível e stats traz acurácia de memória
+    clock.advance(minutes=25)
+    outcome = client.post("/api/sessions/current/finish", json=NOTES, headers=H).json()
+    assert outcome["level_before"] == "BEGINNER"
+    assert outcome["next_level"] == "INTERMEDIATE"
+    assert outcome["points_for_next_level"] == 10
+    assert outcome["challenges_for_next_level"] == 3
+
+    consolidate(client, clock, c1["id"])
+    client.post("/api/sessions", json={"content_id": c1["id"]}, headers=H)
+    clock.advance(minutes=25)
+    answers = answer_all(client, "RECALLED")
+    answers[0]["grade"] = "PARTIAL"
+    rev_out = client.post(
+        "/api/sessions/current/finish",
+        json={**NOTES, "recall_rating": 3, "answers": answers},
+        headers=H,
+    ).json()
+    assert rev_out["recall_total"] == 3
+    assert rev_out["recall_recalled"] == 2
+    stats = client.get("/api/stats?days=30").json()
+    assert stats["recall_questions_total"] == 3
+    assert stats["recall_questions_recalled"] == 2
+    assert stats["recall_questions_partial"] == 1
+    assert stats["recall_accuracy"] == pytest.approx(83.3)

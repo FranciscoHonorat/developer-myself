@@ -18,6 +18,7 @@ from developer_myself.learning.adapters.http.schemas import (
     OutcomeOut,
     PlanOut,
     PreferencesIn,
+    PurposeIn,
     RenameContentIn,
     ReorderQueueIn,
     SolveChallengeIn,
@@ -28,6 +29,7 @@ from developer_myself.learning.adapters.http.schemas import (
 )
 from developer_myself.learning.application.use_cases import (
     AnswerInput,
+    FutureQuestionInput,
     LearningUseCases,
     NotesInput,
 )
@@ -55,11 +57,23 @@ async def change_timezone(body: TimezoneIn, learner_id: LearnerIdDep, uc: UseCas
     await uc.change_timezone(learner_id, body.timezone)
 
 
+@router.put("/plan/purpose", status_code=status.HTTP_204_NO_CONTENT)
+async def change_purpose(body: PurposeIn, learner_id: LearnerIdDep, uc: UseCases) -> None:
+    await uc.change_purpose(learner_id, body.purpose)
+
+
 @router.post("/contents", status_code=status.HTTP_201_CREATED)
 async def add_content(body: AddContentIn, learner_id: LearnerIdDep, uc: UseCases) -> ContentOut:
-    content = await uc.add_content(learner_id, body.title, body.kind.value)
+    content = await uc.add_content(learner_id, body.title, body.kind.value, body.purpose)
     plan = await uc.get_plan(learner_id)
     return ContentOut.of(plan, plan.content(content.id))
+
+
+@router.put("/contents/{content_id}/purpose", status_code=status.HTTP_204_NO_CONTENT)
+async def change_content_purpose(
+    content_id: uuid.UUID, body: PurposeIn, learner_id: LearnerIdDep, uc: UseCases
+) -> None:
+    await uc.change_content_purpose(learner_id, content_id, body.purpose)
 
 
 @router.post("/contents/{content_id}/finish")
@@ -87,7 +101,9 @@ async def remove_content(
 
 @router.put("/plan/preferences", status_code=status.HTTP_204_NO_CONTENT)
 async def change_preferences(body: PreferencesIn, learner_id: LearnerIdDep, uc: UseCases) -> None:
-    await uc.change_preferences(learner_id, body.minutes_per_day, body.rest_days)
+    await uc.change_preferences(
+        learner_id, body.minutes_per_day, body.rest_days, body.max_in_progress
+    )
 
 
 @router.put("/queue", status_code=status.HTTP_204_NO_CONTENT)
@@ -135,6 +151,11 @@ async def finish_session(
         NotesInput(body.studied, body.understood, body.to_review),
         body.recall_rating,
         [AnswerInput(a.question_id, a.answer, a.grade, a.useful) for a in body.answers],
+        (
+            FutureQuestionInput(body.future_question.text, body.future_question.answer)
+            if body.future_question is not None
+            else None
+        ),
     )
     return OutcomeOut.of(outcome)
 

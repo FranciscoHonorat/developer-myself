@@ -1,5 +1,6 @@
 // `api/` é o port do frontend: componentes NUNCA chamam fetch direto (ADR-0011).
 import type {
+  ActiveWarmup,
   AdminAccountsPage,
   Challenge,
   CompetencySheet,
@@ -14,11 +15,14 @@ import type {
   NotesInput,
   Outcome,
   Plan,
+  RecallAnswer,
   Recommendations,
   Registration,
   SessionKind,
   Stats,
   Today,
+  WarmupNext,
+  WarmupStatus,
   Week,
 } from "./types";
 
@@ -79,8 +83,17 @@ export const api = {
 
   plan: () => request<Plan>("GET", "/plan"),
   changeTimezone: (timezone: string) => request<void>("PUT", "/plan/timezone", { timezone }),
-  addContent: (title: string, kind: ContentKind) =>
-    request<Content>("POST", "/contents", { title, kind }),
+  changePurpose: (purpose: string | null) => request<void>("PUT", "/plan/purpose", { purpose }),
+  addContent: (title: string, kind: ContentKind, purpose?: string) =>
+    request<Content>("POST", "/contents", {
+      title,
+      kind,
+      ...(purpose?.trim() ? { purpose: purpose.trim() } : {}),
+    }),
+  changeContentPurpose: (contentId: string, purpose: string | null) =>
+    request<void>("PUT", `/contents/${contentId}/purpose`, { purpose }),
+  reorderQueue: (contentIds: string[]) =>
+    request<void>("PUT", "/queue", { content_ids: contentIds }),
   finishContent: (contentId: string) =>
     request<{ unlocked_content_id: string | null }>("POST", `/contents/${contentId}/finish`),
   addChallenge: (contentId: string, description: string, target_level: MasteryLevel) =>
@@ -97,6 +110,12 @@ export const api = {
   finishSession: (notes: NotesInput) => request<Outcome>("POST", "/sessions/current/finish", notes),
   cancelSession: () => request<void>("POST", "/sessions/current/cancel"),
 
+  warmup: () => request<WarmupStatus>("GET", "/warmup"),
+  startWarmup: () => request<ActiveWarmup>("POST", "/warmup"),
+  finishWarmup: (answers: RecallAnswer[]) =>
+    request<{ next: WarmupNext | null }>("POST", "/warmup/finish", { answers }),
+  cancelWarmup: () => request<void>("DELETE", "/warmup"),
+
   history: (cursor: string | null = null, limit = 20) =>
     request<HistoryPage>(
       "GET",
@@ -107,8 +126,12 @@ export const api = {
   recommendations: () => request<Recommendations>("GET", "/recommendations"),
   today: () => request<Today>("GET", "/today"),
   week: () => request<Week>("GET", "/week"),
-  changePreferences: (minutes_per_day: number, rest_days: number[]) =>
-    request<void>("PUT", "/plan/preferences", { minutes_per_day, rest_days }),
+  changePreferences: (minutes_per_day: number, rest_days: number[], max_in_progress?: number) =>
+    request<void>("PUT", "/plan/preferences", {
+      minutes_per_day,
+      rest_days,
+      ...(max_in_progress !== undefined ? { max_in_progress } : {}),
+    }),
   competencies: () => request<CompetencySheet>("GET", "/competencies"),
   schedule: (contentId: string) =>
     request<ContentSchedule>("GET", `/contents/${contentId}/schedule`),

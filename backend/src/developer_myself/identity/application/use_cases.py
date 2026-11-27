@@ -1,7 +1,7 @@
 """Casos de uso de identidade."""
 
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from developer_myself.identity.application.ports import (
     AuthSessionRepository,
@@ -32,6 +32,7 @@ from developer_myself.identity.domain.model import (
 from developer_myself.shared.clock import Clock
 
 DEFAULT_SESSION_TTL = timedelta(days=14)
+LEGACY_CHECK_COOLDOWN = timedelta(minutes=5)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +61,7 @@ class IdentityUseCases:
     registration: RegistrationGate = field(default_factory=_AlwaysOpen)
     admin_emails: frozenset[Email] = frozenset()
     _dummy_hash: str | None = field(default=None, repr=False)
+    _login_migration_checked_at: datetime | None = field(default=None, repr=False)
 
     async def register(self, username: str, email: str, password: str) -> User:
         handle = Username(username)
@@ -89,10 +91,13 @@ class IdentityUseCases:
         except InvalidUsernameError:
             raise InvalidCredentialsError from None
         user = await self.users.get_by_username(handle)
-        if user is None and await self.assign_missing_usernames():
+        if user is None and self._should_check_legacy():
             # Conta criada sem username depois do boot (instância antiga no meio do deploy):
-            # migra na hora e procura de novo, em vez de esperar o próximo restart.
-            user = await self.users.get_by_username(handle)
+            # migra na hora, mas com cooldown quando não há legados (evita full-scan).
+            if await self.assign_missing_usernames():
+                user = await self.users.get_by_username(handle)
+            else:
+                self._login_migration_checked_at = self.clock.now()
         if user is None:
             # Gasta o mesmo tempo de um login real: não revela se o username existe.
             await self.hasher.verify(await self._dummy(), password)
@@ -122,12 +127,18 @@ class IdentityUseCases:
             raise NotAuthenticatedError("Usuário não encontrado.")
         return user
 
-    async def delete_account(self, user_id: UserId, password: str) -> None:
+    async def verify_password(self, user_id: UserId, password: str) -> None:
         user = await self.me(user_id)
         if not await self.hasher.verify(user.password_hash, password):
             raise InvalidCredentialsError
+
+    async def finalize_delete_account(self, user_id: UserId) -> None:
         await self.sessions.delete_all_for(user_id)
         await self.users.delete(user_id)
+
+    async def delete_account(self, user_id: UserId, password: str) -> None:
+        await self.verify_password(user_id, password)
+        await self.finalize_delete_account(user_id)
 
     async def change_username(self, user_id: UserId, new: str, password: str) -> User:
         user = await self.me(user_id)
@@ -196,6 +207,12 @@ class IdentityUseCases:
             raise UserNotFoundError
         await self.sessions.delete_all_for(account_id)
         await self.users.delete(account_id)
+
+    def _should_check_legacy(self) -> bool:
+        return (
+            self._login_migration_checked_at is None
+            or self.clock.now() - self._login_migration_checked_at >= LEGACY_CHECK_COOLDOWN
+        )
 
     async def _dummy(self) -> str:
         if self._dummy_hash is None:

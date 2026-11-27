@@ -47,6 +47,20 @@ export function clearRecallDraft(key: string) {
   }
 }
 
+/** Limpa rascunhos locais de testes/aquecimentos ao sair ou trocar de conta. */
+export function clearAllRecallDrafts() {
+  try {
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("recall:") || k.startsWith("warmup:"))) toRemove.push(k);
+    }
+    for (const k of toRemove) localStorage.removeItem(k);
+  } catch {
+    // sem storage
+  }
+}
+
 interface Props {
   questions: RecallQuestion[];
   storageKey: string;
@@ -105,6 +119,16 @@ export function RecallTest({ questions, storageKey, onChange }: Props) {
                 <p className="whitespace-pre-wrap rounded-md bg-muted px-3 py-2 text-sm [overflow-wrap:anywhere]">
                   {draft.answers[q.id] || <em className="text-muted-foreground">(em branco)</em>}
                 </p>
+                {q.expected_answer ? (
+                  <div className="flex flex-col gap-1 rounded-md border border-dashed px-3 py-2 text-sm">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Sua resposta esperada
+                    </span>
+                    <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+                      {q.expected_answer}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                   <div
                     role="radiogroup"

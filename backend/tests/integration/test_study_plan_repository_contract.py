@@ -19,10 +19,13 @@ from developer_myself.learning.domain.value_objects import (
     ContentKind,
     Evidence,
     LearnerId,
+    LearnerQuestion,
     MasteryLevel,
     Notes,
+    Purpose,
     QuestionSource,
     RecallQuestion,
+    StudyPreferences,
     Timezone,
     Title,
 )
@@ -51,7 +54,15 @@ async def repository(request: pytest.FixtureRequest) -> AsyncIterator[StudyPlanR
 
 def rich_plan() -> StudyPlan:
     plan = StudyPlan.create(LearnerId.new(), Timezone("America/Sao_Paulo"))
-    a = plan.add_content(ContentId.new(), Title("Clean Code"), ContentKind.BOOK, NOW)
+    a = plan.add_content(
+        ContentId.new(),
+        Title("Clean Code"),
+        ContentKind.BOOK,
+        NOW,
+        purpose=Purpose("Escrever código limpo"),
+    )
+    plan.change_purpose(Purpose("Dominar engenharia de software"), NOW)
+    plan.change_preferences(StudyPreferences(210, frozenset()), NOW, max_in_progress=2)
     plan.add_content(ContentId.new(), Title("Refactoring"), ContentKind.COURSE, NOW)
     plan.start_session(a.id, NOW)
     plan.finish_session(NOTES, NOW + timedelta(minutes=30))
@@ -65,7 +76,15 @@ def rich_plan() -> StudyPlan:
 def review_plan() -> StudyPlan:
     """Revisão ativa com teste de memória e um "preciso revisar" guardado."""
     plan = StudyPlan.create(LearnerId.new(), Timezone("America/Sao_Paulo"))
-    a = plan.add_content(ContentId.new(), Title("Clean Code"), ContentKind.BOOK, NOW)
+    a = plan.add_content(
+        ContentId.new(),
+        Title("Clean Code"),
+        ContentKind.BOOK,
+        NOW,
+        purpose=Purpose("Escrever código limpo"),
+    )
+    plan.change_purpose(Purpose("Dominar engenharia de software"), NOW)
+    plan.change_preferences(StudyPreferences(210, frozenset()), NOW, max_in_progress=2)
     plan.start_session(a.id, NOW)
     plan.finish_session(Notes("a", "b", "CQS\n- nomes"), NOW + timedelta(minutes=30))
     a._consolidate(NOW)
@@ -93,6 +112,69 @@ async def test_roundtrip_preserves_the_recall_test(repository: StudyPlanReposito
     assert loaded.contents == plan.contents
 
 
+def warmup_plan() -> StudyPlan:
+    """Aquecimento ativo com pergunta do aprendiz, um aquecimento já feito e fila de perguntas."""
+    plan = StudyPlan.create(LearnerId.new(), Timezone("America/Sao_Paulo"))
+    a = plan.add_content(
+        ContentId.new(),
+        Title("Clean Code"),
+        ContentKind.BOOK,
+        NOW,
+        purpose=Purpose("Escrever código limpo"),
+    )
+    plan.change_purpose(Purpose("Dominar engenharia de software"), NOW)
+    plan.change_preferences(StudyPreferences(210, frozenset()), NOW, max_in_progress=2)
+    plan.start_session(a.id, NOW)
+    lq = LearnerQuestion(uuid.uuid7(), "O que é CQS?", NOW, "Separar comando de consulta")
+    plan.finish_session(NOTES, NOW + timedelta(minutes=30), future_question=lq)
+    plan.last_warmup_on = (NOW - timedelta(days=1)).date()
+    questions = (
+        RecallQuestion(lq.id, lq.text, QuestionSource.LEARNER, "learner_question",
+                       expected_answer=lq.answer),
+        RecallQuestion(uuid.uuid7(), "O que você lembra de nomes?", QuestionSource.SPACED_TOPIC,
+                       "recall_topic", "nomes"),
+    )  # fmt: skip
+    plan.start_warmup(a.id, questions, NOW + timedelta(days=1))
+    return plan
+
+
+async def test_roundtrip_preserves_the_warmup(repository: StudyPlanRepository) -> None:
+    plan = warmup_plan()
+    await repository.save(plan)
+    loaded = await repository.get(plan.id)
+    assert loaded is not None
+    assert loaded.active_warmup == plan.active_warmup
+    assert loaded.active_warmup is not None
+    assert loaded.active_warmup.questions[0].expected_answer == "Separar comando de consulta"
+    assert loaded.last_warmup_on == plan.last_warmup_on
+    assert loaded.contents[0].learner_questions == plan.contents[0].learner_questions
+    assert len(loaded.contents[0].learner_questions) == 1
+    assert loaded.contents == plan.contents
+
+
+def test_upcast_v5_to_v6() -> None:
+    doc = {"schema_version": 5, "contents": [{"id": uuid.uuid4()}]}
+    out = upcast(doc)
+    assert out["schema_version"] == 6
+    assert out["purpose"] is None
+    assert out["max_in_progress"] is None
+    assert out["contents"][0]["purpose"] is None
+
+
+def test_upcast_v4_to_v5() -> None:
+    doc = {
+        "schema_version": 4,
+        "active_session": {"content_id": uuid.uuid4(), "started_at": NOW, "questions": [{}]},
+        "contents": [{"id": uuid.uuid4()}],
+    }
+    out = upcast(doc)
+    assert out["schema_version"] == 6
+    assert out["active_warmup"] is None
+    assert out["last_warmup_on"] is None
+    assert out["contents"][0]["learner_questions"] == []
+    assert out["active_session"]["questions"] == [{"expected_answer": None}]
+
+
 def test_upcast_v3_to_v4() -> None:
     doc = {
         "schema_version": 3,
@@ -100,14 +182,14 @@ def test_upcast_v3_to_v4() -> None:
         "contents": [{"id": uuid.uuid4()}, {"id": uuid.uuid4()}],
     }
     out = upcast(doc)
-    assert out["schema_version"] == 4
+    assert out["schema_version"] == 6
     assert out["active_session"]["questions"] == []
     assert [c["last_to_review"] for c in out["contents"]] == [None, None]
 
 
 def test_upcast_v3_to_v4_without_active_session() -> None:
     out = upcast({"schema_version": 3, "active_session": None, "contents": []})
-    assert out["schema_version"] == 4
+    assert out["schema_version"] == 6
     assert out["active_session"] is None
 
 
@@ -123,6 +205,9 @@ async def test_roundtrip_preserves_the_whole_aggregate(repository: StudyPlanRepo
     assert loaded.contents == plan.contents
     assert loaded.active_session == plan.active_session
     assert loaded.timezone == plan.timezone
+    assert loaded.purpose == plan.purpose == Purpose("Dominar engenharia de software")
+    assert loaded.max_in_progress == plan.max_in_progress == 2
+    assert loaded.contents[0].purpose == Purpose("Escrever código limpo")
     assert loaded.last_review_on == plan.last_review_on
     assert loaded.version == plan.version == 1
     assert loaded.pending_events == ()
@@ -166,3 +251,13 @@ async def test_delete(repository: StudyPlanRepository) -> None:
     await repository.save(plan)
     await repository.delete(plan.id)
     assert await repository.get(plan.id) is None
+
+
+async def test_content_counts_batches_learners(repository: StudyPlanRepository) -> None:
+    p1 = rich_plan()  # 2 conteúdos
+    p2 = StudyPlan.create(LearnerId.new(), Timezone("UTC"))  # 0 conteúdos
+    missing = LearnerId.new()
+    await repository.save(p1)
+    await repository.save(p2)
+    assert await repository.content_counts([p1.id, p2.id, missing]) == {p1.id: 2, p2.id: 0}
+    assert await repository.content_counts([]) == {}

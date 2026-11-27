@@ -134,3 +134,51 @@ Then("a página não rola na horizontal", async ({ page }) => {
     expect(overflow, `rolagem horizontal em ${path}`).toBeLessThanOrEqual(0);
   }
 });
+
+// ---------------------------------------------------------------- aquecimento
+When("eu deixo para o eu do futuro a pergunta {string}", async ({ page }, text: string) => {
+  await page.getByText("💭 Deixar uma pergunta para o seu eu do futuro (opcional)").click();
+  await page.getByLabel("Pergunta", { exact: true }).fill(text);
+});
+
+When("eu volto para a tela Hoje", async ({ page }) => {
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await closeOutcome(page);
+  await page
+    .getByRole("navigation", { name: "Seções" })
+    .getByRole("link", { name: "Hoje" })
+    .click();
+});
+
+When("eu começo o aquecimento", async ({ page }) => {
+  await expect(page.getByText("🔥 Aquecimento · 2 perguntas · ~2 min")).toBeVisible();
+  await page.getByRole("button", { name: "Começar" }).click();
+});
+
+Then("a 1ª pergunta do aquecimento é {string}", async ({ page }, text: string) => {
+  const first = page.getByRole("region", { name: "🔥 Aquecimento" }).getByRole("listitem").first();
+  await expect(first).toContainText(text);
+});
+
+When("eu corrijo e concluo o aquecimento", async ({ page }) => {
+  const panel = page.getByRole("region", { name: "🔥 Aquecimento" });
+  await panel.getByRole("button", { name: "Conferir respostas" }).click();
+  for (const group of await panel.getByRole("radiogroup", { name: /Correção/ }).all()) {
+    await group.getByText("Acertei").click();
+  }
+  await panel.getByRole("button", { name: "Concluir aquecimento" }).click();
+});
+
+Then("vejo que o aquecimento foi feito, sem repetir o estudo de hoje", async ({ page }) => {
+  // "Clean Code" já foi estudado hoje: o próximo passo da tela Hoje não o repete.
+  await expect(page.getByText("✅ Aquecimento feito.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Iniciar sessão" })).toHaveCount(0);
+});
+
+When("eu encerro por hoje", async ({ page }) => {
+  await page.getByRole("button", { name: "Por hoje é só" }).click();
+});
+
+Then("a tela Hoje mostra que o aquecimento de hoje está feito", async ({ page }) => {
+  await expect(page.getByText("✅ Aquecimento feito hoje")).toBeVisible();
+});

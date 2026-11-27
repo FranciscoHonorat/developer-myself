@@ -8,7 +8,11 @@ from typing import Any
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError
 
-from developer_myself.insights.application.history import HistoryCursor, SessionRecord
+from developer_myself.insights.application.history import (
+    HistoryCursor,
+    LearnerHistorySummary,
+    SessionRecord,
+)
 
 Doc = dict[str, Any]
 
@@ -78,6 +82,32 @@ class MongoSessionHistoryStore:
 
     async def count_for(self, learner_id: str) -> int:
         return await self._sessions.count_documents({"learner_id": learner_id})
+
+    async def summaries_for(self, learner_ids: list[str]) -> dict[str, LearnerHistorySummary]:
+        if not learner_ids:
+            return {}
+        pipeline: list[Doc] = [
+            {"$match": {"learner_id": {"$in": learner_ids}}},
+            {
+                "$group": {
+                    "_id": "$learner_id",
+                    "sessions": {"$sum": 1},
+                    "last_activity_at": {"$max": "$finished_at"},
+                }
+            },
+        ]
+        cursor = await self._sessions.aggregate(pipeline)
+        return {
+            str(doc["_id"]): LearnerHistorySummary(
+                sessions=int(doc["sessions"]),
+                last_activity_at=(
+                    doc["last_activity_at"].astimezone(UTC)
+                    if doc.get("last_activity_at") is not None
+                    else None
+                ),
+            )
+            async for doc in cursor
+        }
 
     async def delete_for(self, learner_id: str) -> None:
         await self._sessions.delete_many({"learner_id": learner_id})

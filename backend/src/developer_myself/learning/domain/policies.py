@@ -120,6 +120,12 @@ class UnlockPolicy(Protocol):
     @property
     def max_in_progress(self) -> int: ...
 
+    @property
+    def daily_competencies(self) -> frozenset[str]:
+        """Competências de hábito diário: ficam em andamento numa faixa própria, sem ocupar
+        vaga, e não são consolidadas em Intermediário (só saem ao serem concluídas)."""
+        ...
+
     def competency_of(self, title: str) -> str: ...
 
     def affinity(self, a: str, b: str) -> float: ...
@@ -130,6 +136,7 @@ class SingleTrackUnlockPolicy:
     """Padrão do domínio: um conteúdo por vez, em ordem de chegada (ADR-0002 original)."""
 
     max_in_progress: int = 1
+    daily_competencies: frozenset[str] = frozenset()
 
     def competency_of(self, title: str) -> str:  # noqa: ARG002 - uma trilha só
         return "trilha"

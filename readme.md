@@ -20,14 +20,17 @@ As regras vivem em [`backend/tests/features/*.feature`](backend/tests/features) 
 |---|---|
 | Ponto | Sessão de **25 min a 4 h** + anotações (*estudei / entendi / preciso revisar*, os três preenchidos, ≥ 50 caracteres sem espaços) = **1 ponto** |
 | Revisão diária | Se existe conteúdo consolidado, é preciso **revisar antes** de estudar o atual no mesmo dia (local) para pontuar |
-| Foco | Só **1** conteúdo em andamento; os novos entram numa **fila** (FIFO) |
+| Foco | Até **3** conteúdos em andamento, cada um de uma competência; os novos entram numa **fila**, e a vaga vai para o que mais se interliga com os em andamento |
+| Inglês todo dia | Inglês é **hábito diário**: fica em andamento **fora das 3 vagas**, tem **2 pomodoros em todo dia** de estudo (logo depois das revisões) e só sai da faixa ao ser concluído |
 | Nível | Intermediário = **10 pts + 3 desafios** de Intermediário; Avançado = **30 pts + 3 desafios** de Avançado |
 | Desbloqueio | Ao chegar a Intermediário (ou concluir), o conteúdo é consolidado e o próximo da fila é liberado |
-| Cronograma | Cada conteúdo tem 30 dias: 1 sessão pontuada = 1 dia; dia 10 = Intermediário, dia 30 = Avançado. A tela mostra **📅 Hoje** (revisões + estudo) |
+| Cronograma | Cada conteúdo tem 30 dias: 1 sessão pontuada = 1 dia; dia 10 = Intermediário, dia 30 = Avançado. A tela mostra **📅 Hoje** (revisões + estudo). Ritmo de **3h a 8h** por dia |
 | Competências | Aba **Competências**: nível por skill (Aprendiz → Especialista), meta do mapa, XP e nível geral. Sem revisar ou resolver desafios por **3 semanas**, a skill **enferruja** (os pontos ficam) |
 | Autoavaliação | Toda revisão pergunta "quanto você lembrava?" (1 Esqueci · 2 Difícil · 3 Bem · 4 Fácil); é o que ensina a rede neural |
 | Caderno | Bloco livre por matéria para escrever conceitos com as suas palavras, salvo sozinho enquanto você digita; **não pontua** e não substitui as 3 anotações. Abra na aba **Caderno** ou no botão 📓 do card |
 | Teste de memória | Toda revisão começa com 3 perguntas respondidas sem consultar; você confere, marca Errei/Parcial/Acertei e só então finaliza. Seu último "preciso revisar" aparece no topo de cada sessão |
+| Aquecimento | Na aba **Hoje**, 2 perguntas sem consultar (~2 min) sobre o que você estudou: o menor primeiro passo do dia. Pode parar ali, sem culpa; **não pontua**, **1 por dia**, e não substitui a revisão obrigatória. Depois, sugere o próximo passo (revisão primeiro, se o dia exige) |
+| Pergunta do eu do futuro | No fim de um estudo, campo opcional para deixar uma pergunta (e a resposta esperada). Ela volta primeiro no próximo aquecimento ou revisão e sai da fila depois de respondida (até 5 guardadas) |
 | Anti-trapaça | O servidor marca o tempo; 1 sessão ativa por vez; sessão > 4 h é abandonada e nunca pontua |
 
 ## Como usar

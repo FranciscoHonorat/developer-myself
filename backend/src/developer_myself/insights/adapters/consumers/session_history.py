@@ -22,9 +22,23 @@ async def handle_message(message: AbstractIncomingMessage, handler: Handler) -> 
         log.error("poison_message", message_id=message.message_id)
         await message.reject(requeue=False)  # vai para a DLQ
         return
-    set_correlation_id(envelope.get("correlation_id"))
+    set_correlation_id(envelope.get("correlation_id") if isinstance(envelope, dict) else None)
+    if not isinstance(envelope, dict):
+        log.error("poison_message", message_id=message.message_id, reason="not_an_object")
+        await message.reject(requeue=False)
+        return
     try:
         stored = await handler(envelope)
+    except (KeyError, ValueError, TypeError) as exc:
+        # Erro determinístico de formato/esquema: não adianta reprocessar, manda direto para a DLQ.
+        log.error(
+            "poison_message",
+            message_id=message.message_id,
+            event_id=envelope.get("event_id"),
+            error=type(exc).__name__,
+        )
+        await message.reject(requeue=False)
+        return
     except Exception:
         log.exception("consumer_error", event_id=envelope.get("event_id"))
         await message.nack(requeue=True)

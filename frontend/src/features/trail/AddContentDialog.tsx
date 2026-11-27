@@ -35,6 +35,7 @@ export function AddContentForm({
 }) {
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<ContentKind>("BOOK");
+  const [purpose, setPurpose] = useState("");
   const add = useAddContent();
 
   const onSubmit = (e: FormEvent) => {
@@ -43,9 +44,14 @@ export function AddContentForm({
     // mutateAsync: o refetch pode desmontar o formulário (ex.: guia da primeira vez) antes da
     // resposta, e o TanStack não chama callbacks de `mutate` de componente desmontado.
     add
-      .mutateAsync({ title: title.trim(), kind })
+      .mutateAsync({
+        title: title.trim(),
+        kind,
+        ...(purpose.trim() ? { purpose: purpose.trim() } : {}),
+      })
       .then(() => {
         setTitle("");
+        setPurpose("");
         onAdded?.();
       })
       .catch(() => {}); // o erro aparece via add.error
@@ -79,6 +85,16 @@ export function AddContentForm({
             ))}
           </SelectContent>
         </Select>
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="content-purpose">Por quê? (opcional)</Label>
+        <Input
+          id="content-purpose"
+          value={purpose}
+          onChange={(e) => setPurpose(e.target.value)}
+          placeholder="Ex.: escrever serviços confiáveis em produção"
+          maxLength={300}
+        />
       </div>
       <ErrorState error={add.error} compact />
       <Button type="submit" disabled={add.isPending} className="self-end">

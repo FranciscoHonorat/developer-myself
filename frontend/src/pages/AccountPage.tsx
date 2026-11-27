@@ -1,22 +1,32 @@
 import { Download, LogOut } from "lucide-react";
 import { type FormEvent, type ReactNode, useId, useState } from "react";
 import { api } from "@/api/client";
-import { useAuthCommand, useChangeTimezone, useChangeUsername, useMe, usePlan } from "@/api/hooks";
+import {
+  useAuthCommand,
+  useChangePurpose,
+  useChangeTimezone,
+  useChangeUsername,
+  useMe,
+  usePlan,
+} from "@/api/hooks";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ErrorState } from "@/components/ErrorState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { PreferencesForm } from "@/features/account/PreferencesForm";
 import { ThemeSelect } from "@/features/account/ThemeSelect";
 import { cn } from "@/lib/utils";
 
 function Card({
+  id,
   title,
   description,
   danger,
   children,
 }: {
+  id?: string;
   title: string;
   description?: ReactNode;
   danger?: boolean;
@@ -25,6 +35,7 @@ function Card({
   const headingId = useId();
   return (
     <section
+      id={id}
       aria-labelledby={headingId}
       className={cn(
         "flex flex-col gap-4 rounded-xl border bg-card p-5",
@@ -69,7 +80,7 @@ export function AccountPage() {
       a.href = url;
       a.download = "developer-myself-export.json";
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       setExportError(err);
     }
@@ -94,12 +105,19 @@ export function AccountPage() {
 
       <UsernameCard current={me.data?.username ?? null} />
 
+      {plan.data && <PurposeCard key={plan.data.purpose ?? ""} current={plan.data.purpose ?? ""} />}
+
       <Card title="Aparência" description="Vale só neste navegador.">
         <ThemeSelect />
       </Card>
 
       <Card title="Ritmo de estudo" description="A semana é recalculada a partir daqui.">
-        {plan.data && <PreferencesForm prefs={plan.data.preferences} />}
+        {plan.data && (
+          <PreferencesForm
+            prefs={plan.data.preferences}
+            maxInProgress={plan.data.max_in_progress}
+          />
+        )}
       </Card>
 
       <Card
@@ -246,6 +264,59 @@ function UsernameCard({ current }: { current: string | null }) {
         </Button>
       </form>
       {change.isSuccess && <p className="text-sm text-primary">Username atualizado.</p>}
+      <ErrorState error={change.error} compact />
+    </Card>
+  );
+}
+
+/** Propósito geral da trilha (SDT): o norte que aparece no topo do Hoje. */
+function PurposeCard({ current }: { current: string }) {
+  const change = useChangePurpose();
+  const [text, setText] = useState(current);
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    change.mutate(text.trim() || null);
+  };
+
+  return (
+    <Card
+      id="proposito"
+      title="Propósito de estudo"
+      description="O seu norte: por que essa jornada importa? Ele aparece no topo do Hoje."
+    >
+      <form className="flex flex-col gap-3" onSubmit={onSubmit}>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="plan-purpose">Seu propósito</Label>
+          <Textarea
+            id="plan-purpose"
+            rows={2}
+            maxLength={300}
+            value={text}
+            placeholder="Ex.: dominar AppSec e sistemas distribuídos para liderar arquitetura com autonomia"
+            onChange={(e) => setText(e.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="submit" disabled={change.isPending}>
+            Salvar propósito
+          </Button>
+          {current && (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={change.isPending}
+              onClick={() => {
+                setText("");
+                change.mutate(null);
+              }}
+            >
+              Limpar
+            </Button>
+          )}
+        </div>
+      </form>
+      {change.isSuccess && <p className="text-sm text-primary">Propósito atualizado.</p>}
       <ErrorState error={change.error} compact />
     </Card>
   );

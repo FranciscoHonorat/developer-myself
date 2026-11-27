@@ -80,4 +80,27 @@ describe("WeekDetails", () => {
     const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
     expect(JSON.parse(String(put?.[1]?.body))).toEqual({ minutes_per_day: 240, rest_days: [5, 6] });
   });
+
+  it("oferece de 3h a 8h por dia", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (_url, init) =>
+        init?.method === "PUT" ? new Response(null, { status: 204 }) : jsonResponse(week),
+      );
+    renderWithClient(<WeekDetails />);
+    const user = userEvent.setup();
+    const ritmo = await screen.findByRole("group", { name: "Tempo de estudo por dia" });
+    expect(
+      within(ritmo)
+        .getAllByRole("radio")
+        .map((r) => r.closest("label")?.textContent),
+    ).toEqual(["3h", "3h30", "4h", "4h30", "5h", "5h30", "6h", "7h", "8h"]);
+    await user.click(screen.getByRole("radio", { name: "8h" }));
+    await user.click(screen.getByRole("button", { name: "Salvar ritmo" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
+    );
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(String(put?.[1]?.body)).minutes_per_day).toBe(480);
+  });
 });

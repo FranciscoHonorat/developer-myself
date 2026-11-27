@@ -1,16 +1,20 @@
 """Escolha das 3 perguntas do teste de memória por regra fixa."""
 
+import uuid
 from datetime import UTC, datetime
 
 from developer_myself.curriculum.domain.schedule import CatalogEntry, Depth, build_schedule
 from developer_myself.learning.adapters.curriculum.question_picker import RuleQuestionPicker
+from developer_myself.learning.application.questions import QUESTIONS_PER_WARMUP
 from developer_myself.learning.domain.content import Content
 from developer_myself.learning.domain.study_plan import StudyPlan
 from developer_myself.learning.domain.value_objects import (
     ContentId,
     ContentKind,
     LearnerId,
+    LearnerQuestion,
     Points,
+    QuestionSource,
     Timezone,
     Title,
 )
@@ -109,3 +113,48 @@ def test_without_catalog_topics_uses_overview() -> None:
 def test_ids_are_unique() -> None:
     questions = RuleQuestionPicker().pick(PLAN, content(), NOW)
     assert len({q.id for q in questions}) == 3
+
+
+# ------------------------------------------------ aquecimento e perguntas do aprendiz
+def learner(c: Content, *texts: str) -> list[LearnerQuestion]:
+    qs = [LearnerQuestion(uuid.uuid7(), t, NOW, answer=f"resp {t}") for t in texts]
+    for q in qs:
+        c._add_learner_question(q)
+    return qs
+
+
+def test_warmup_has_two_questions() -> None:
+    questions = RuleQuestionPicker().pick(PLAN, content(points=11), NOW, count=QUESTIONS_PER_WARMUP)
+    assert QUESTIONS_PER_WARMUP == 2
+    assert len(questions) == 2
+
+
+def test_learner_question_comes_first_with_expected_answer() -> None:
+    c = content(points=11, to_review="canais")
+    (lq,) = learner(c, "O que é CQS?")
+    first = RuleQuestionPicker().pick(PLAN, c, NOW)[0]
+    assert first.id == lq.id
+    assert first.source is QuestionSource.LEARNER
+    assert first.template == "learner_question"
+    assert first.text == "O que é CQS?"
+    assert first.topic is None
+    assert first.expected_answer == "resp O que é CQS?"
+
+
+def test_warmup_keeps_one_slot_for_topics() -> None:
+    c = content(points=11, to_review="canais")
+    learner(c, "q1", "q2")
+    got = RuleQuestionPicker().pick(PLAN, c, NOW, count=QUESTIONS_PER_WARMUP)
+    assert [q.source for q in got] == [QuestionSource.LEARNER, QuestionSource.SPACED_TOPIC]
+    assert got[0].text == "q1"
+
+
+def test_review_takes_at_most_two_from_learner_and_to_review() -> None:
+    c = content(points=11, to_review="canais")
+    learner(c, "q1", "q2", "q3")
+    got = RuleQuestionPicker().pick(PLAN, c, NOW)
+    assert [q.source for q in got] == [
+        QuestionSource.LEARNER,
+        QuestionSource.LEARNER,
+        QuestionSource.SPACED_TOPIC,
+    ]

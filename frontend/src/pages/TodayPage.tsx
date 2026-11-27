@@ -1,4 +1,4 @@
-import { CalendarCheck, NotebookPen, Route } from "lucide-react";
+import { CalendarCheck, Compass, NotebookPen, Route } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { usePlan, useToday } from "@/api/hooks";
@@ -16,6 +16,7 @@ import { GamificationStrip } from "@/features/today/GamificationStrip";
 import { NextStepCard } from "@/features/today/NextStepCard";
 import { ReviewSuggestion } from "@/features/today/ReviewSuggestion";
 import { WeekStrip } from "@/features/today/WeekStrip";
+import { WarmupCard } from "@/features/warmup/WarmupCard";
 
 function greeting(hour: number): string {
   if (hour < 12) return "Bom dia";
@@ -29,6 +30,7 @@ export function TodayPage() {
   const today = useToday();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [guide, setGuide] = useState<"auto" | "active" | "closed">("auto");
+  const [chosenId, setChosenId] = useState<string | null>(null);
 
   if (plan.isPending || today.isPending) {
     return (
@@ -58,21 +60,51 @@ export function TodayPage() {
     month: "short",
   }).format(now);
   const items = dayItems(today.data, p, localDate(now, p.timezone));
-  const next = nextStep(items);
+  const pendingItems = items.filter((i) => i.state !== "done");
+  const recommended = nextStep(items);
+  const next =
+    (chosenId ? pendingItems.find((i) => i.contentId === chosenId) : null) ?? recommended;
+  const purposeById = new Map(p.contents.map((c) => [c.id, c.purpose ?? null]));
   const active = p.active_session;
+  const onboarding = guide !== "closed" && (guide === "active" || needsOnboarding(p));
 
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-1">
         <p className="font-mono text-xs text-muted-foreground">{dateLabel}</p>
         <h1 className="text-2xl font-semibold tracking-tight">{greeting(hour % 24)}</h1>
+        {!onboarding &&
+          (p.purpose ? (
+            <p className="mt-1 flex items-start gap-2 text-sm text-muted-foreground">
+              <Compass aria-hidden className="mt-0.5 size-4 shrink-0 text-primary" />
+              <span className="flex-1">{p.purpose}</span>
+              <Link
+                to="/conta#proposito"
+                className="shrink-0 text-xs underline-offset-4 hover:text-foreground hover:underline"
+              >
+                editar
+              </Link>
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">
+              <Link
+                to="/conta#proposito"
+                className="inline-flex items-center gap-1.5 underline-offset-4 hover:text-foreground hover:underline"
+              >
+                <Compass aria-hidden className="size-3.5" /> Defina seu propósito de estudo
+              </Link>
+            </p>
+          ))}
       </header>
 
       <GamificationStrip />
 
       <OutcomeDialog outcome={outcome} onClose={() => setOutcome(null)} />
 
-      {guide !== "closed" && (guide === "active" || needsOnboarding(p)) ? (
+      {/* O menor passo possível vem primeiro; nunca compete com uma sessão em andamento. */}
+      {!onboarding && !active && <WarmupCard />}
+
+      {onboarding ? (
         <OnboardingGuide
           prefs={p.preferences}
           onStarted={() => setGuide("active")}
@@ -81,7 +113,13 @@ export function TodayPage() {
       ) : active ? (
         <SessionPanel session={active} serverTime={p.server_time} onFinished={setOutcome} />
       ) : next ? (
-        <NextStepCard item={next} mustReviewFirst={p.needs_review_today} />
+        <NextStepCard
+          item={next}
+          purpose={purposeById.get(next.contentId)}
+          alternatives={pendingItems}
+          onSelect={setChosenId}
+          mustReviewFirst={p.needs_review_today}
+        />
       ) : items.length > 0 ? (
         <section className="flex flex-col items-start gap-3 rounded-2xl border bg-card p-6">
           <CalendarCheck aria-hidden className="size-8 text-primary" />

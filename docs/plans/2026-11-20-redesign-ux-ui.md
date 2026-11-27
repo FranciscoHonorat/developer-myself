@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19, Vite 8, TypeScript, TanStack Query 5, Tailwind CSS 4.3.5 (`@tailwindcss/vite`), shadcn 4.23 (CLI) + radix-ui 1.8.1, react-router 8.5.2, lucide-react 1.77.0, sonner 2.0.8, `@fontsource-variable/inter` 5.3.0 e `@fontsource-variable/jetbrains-mono` 5.3.0, class-variance-authority, clsx, tailwind-merge, tw-animate-css. Testes: Vitest + Testing Library, playwright-bdd.
 
-**Spec:** `docs/superpowers/specs/2026-11-20-redesign-ux-ui-design.md`
+**Spec:** `docs/specs/2026-11-20-redesign-ux-ui-design.md`
 
 ## Global Constraints
 

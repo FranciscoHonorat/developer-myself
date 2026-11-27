@@ -39,3 +39,10 @@ def test_idle_keys_are_swept_so_memory_does_not_grow_forever() -> None:
     assert limiter.tracked_keys == 2
     limiter.hit("ip-3", now=120)  # 3ª chamada: varre quem já saiu da janela
     assert limiter.tracked_keys == 1
+
+
+def test_max_keys_bounds_memory_under_flood() -> None:
+    limiter = SlidingWindowLimiter(max_hits=5, window_seconds=60, sweep_every=1_000, max_keys=3)
+    for i in range(10):
+        limiter.hit(f"ip-{i}", now=float(i))
+    assert limiter.tracked_keys == 3

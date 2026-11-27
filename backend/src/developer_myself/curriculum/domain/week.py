@@ -1,14 +1,16 @@
-"""Semana planejada: 7 dias, cada um com 3 ou 4 competências e o tempo escolhido.
+"""Semana planejada: 7 dias, cada um com 3 ou 4 competências (mais o hábito diário) e o
+tempo escolhido.
 
-Unidade: o **pomodoro de 30 min** (25 de estudo + 5 de pausa), então 180, 210 e 240
-minutos viram 6, 7 e 8 pomodoros, sem sobra. Em cada dia de estudo:
+Unidade: o **pomodoro de 30 min** (25 de estudo + 5 de pausa), então de 180 a 480
+minutos viram de 6 a 16 pomodoros, sem sobra. Em cada dia de estudo:
 
 1. **Revisões primeiro** (2 pomodoros), em conteúdos consolidados escolhidos pela rede
    neural e em rodízio ao longo da semana. Revisar antes libera a pontuação do estudo.
-2. **Estudo**: o resto vai para os até 3 conteúdos em andamento, em rodízio (o pomodoro
+2. **Hábito diário** (ex.: Inglês): 2 pomodoros todo dia, logo depois das revisões.
+3. **Estudo**: o resto vai para os até 3 conteúdos em andamento, em rodízio (o pomodoro
    extra muda de conteúdo a cada dia), então todos aparecem em todos os dias.
-3. No máximo **4 competências por dia**: uma revisão que traria a 5ª competência cede a
-   vez para mais um pomodoro na revisão anterior.
+4. No máximo **4 competências por dia** fora o hábito diário: uma revisão que traria a 5ª
+   competência cede a vez para mais um pomodoro na revisão anterior.
 
 Cada pomodoro pontuado avança 1 dia no cronograma de 30 dias do conteúdo, e a semana
 acompanha isso: um bloco que cobre um dia de desafio vira bloco de desafio.
@@ -23,6 +25,7 @@ from developer_myself.curriculum.domain.schedule import TOTAL_DAYS, DayKind, Sch
 POMODORO_MINUTES = 30
 STUDY_MINUTES = 25
 REVIEW_POMODOROS = 2
+DAILY_POMODOROS = 2
 MAX_COMPETENCIES_PER_DAY = 4
 WEEKDAY_NAMES = ("segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo")
 
@@ -145,6 +148,7 @@ def build_week(
     minutes_per_day: int,
     rest_days: frozenset[int],
     start: date,
+    daily: list[Track] | None = None,
 ) -> list[WeekDay]:
     pomodoros = minutes_per_day // POMODORO_MINUTES
     study = study[: MAX_COMPETENCIES_PER_DAY - 1]
@@ -157,12 +161,18 @@ def build_week(
         if weekday in rest_days:
             days.append(WeekDay(current, weekday, is_rest=True))
             continue
-        review_budget = min(REVIEW_POMODOROS, pomodoros) if study else pomodoros
+        minimum = min(REVIEW_POMODOROS, pomodoros)
+        reserved = DAILY_POMODOROS * len(daily or [])  # sem estudo, o hábito diário fica
+        review_budget = minimum if study else max(pomodoros - reserved, minimum)
         taken = [t.competency for t in study]
         max_picks = REVIEW_POMODOROS if study else MAX_COMPETENCIES_PER_DAY
         blocks = _review_blocks(
             reviews, active_index, review_budget, taken, cursor, max_picks=max_picks
         )
+        for track in daily or []:
+            left = pomodoros - sum(b.pomodoros for b in blocks)
+            if left > 0:
+                blocks.append(cursor.take(track, min(DAILY_POMODOROS, left), review=False))
         used = sum(b.pomodoros for b in blocks)
         blocks += _study_blocks(study, active_index, pomodoros - used, cursor)
         days.append(WeekDay(current, weekday, is_rest=False, blocks=tuple(blocks)))

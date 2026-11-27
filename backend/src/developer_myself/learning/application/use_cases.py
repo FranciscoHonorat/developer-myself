@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 
 from developer_myself.learning.application.notebooks import NotebookUseCases
-from developer_myself.learning.application.questions import QuestionPicker
+from developer_myself.learning.application.questions import QUESTIONS_PER_WARMUP, QuestionPicker
 from developer_myself.learning.domain.content import Challenge, Content
 from developer_myself.learning.domain.errors import (
     DomainError,
@@ -16,15 +16,17 @@ from developer_myself.learning.domain.errors import (
 )
 from developer_myself.learning.domain.policies import UnlockPolicy
 from developer_myself.learning.domain.repository import NotebookRepository, StudyPlanRepository
-from developer_myself.learning.domain.study_plan import SessionOutcome, StudyPlan
+from developer_myself.learning.domain.study_plan import ActiveWarmup, SessionOutcome, StudyPlan
 from developer_myself.learning.domain.value_objects import (
     ChallengeId,
     ContentId,
     ContentKind,
     Evidence,
     LearnerId,
+    LearnerQuestion,
     MasteryLevel,
     Notes,
+    Purpose,
     RecallAnswer,
     RecallGrade,
     RecallRating,
@@ -79,12 +81,18 @@ class ChangeTimezone(_UseCase):
         await self.repository.save(plan)
 
 
+def _purpose(raw: str | None) -> Purpose | None:
+    return Purpose(raw) if raw is not None and raw.strip() else None
+
+
 @dataclass(slots=True)
 class AddContent(_UseCase):
-    async def __call__(self, learner_id: uuid.UUID, title: str, kind: str) -> Content:
+    async def __call__(
+        self, learner_id: uuid.UUID, title: str, kind: str, purpose: str | None = None
+    ) -> Content:
         plan = await self._load(learner_id)
         content = plan.add_content(
-            ContentId.new(), Title(title), ContentKind(kind), self.clock.now()
+            ContentId.new(), Title(title), ContentKind(kind), self.clock.now(), _purpose(purpose)
         )
         await self.repository.save(plan)
         return content
@@ -122,6 +130,12 @@ class NotesInput:
 
 
 @dataclass(frozen=True, slots=True)
+class FutureQuestionInput:
+    text: str
+    answer: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class AnswerInput:
     question_id: uuid.UUID
     answer: str
@@ -154,17 +168,69 @@ class FinishSession(_UseCase):
         notes: NotesInput,
         recall_rating: int | None = None,
         answers: list[AnswerInput] | None = None,
+        future_question: FutureQuestionInput | None = None,
     ) -> SessionOutcome:
         plan = await self._load(learner_id)
         rating = _rating(recall_rating)
+        now = self.clock.now()
+        question = (
+            LearnerQuestion(uuid.uuid7(), future_question.text, now, future_question.answer)
+            if future_question is not None
+            else None
+        )
         outcome = plan.finish_session(
             Notes(notes.studied, notes.understood, notes.to_review),
-            self.clock.now(),
+            now,
             rating,
             tuple(_answer(a) for a in answers or ()),
+            question,
         )
         await self.repository.save(plan)
         return outcome
+
+
+@dataclass(slots=True)
+class StartWarmup(_UseCase):
+    question_picker: QuestionPicker | None = None
+
+    async def __call__(self, learner_id: uuid.UUID, content_id: uuid.UUID) -> ActiveWarmup:
+        plan = await self._load(learner_id)
+        now = self.clock.now()
+        current = plan.current_warmup(now)
+        if current is not None:  # recarregar não sorteia perguntas novas
+            return current
+        content = plan.content(ContentId(content_id))
+        questions = (
+            self.question_picker.pick(plan, content, now, count=QUESTIONS_PER_WARMUP)
+            if self.question_picker is not None and plan.can_warm_up(content)
+            else ()
+        )
+        warmup = plan.start_warmup(content.id, questions, now)
+        await self.repository.save(plan)
+        return warmup
+
+
+@dataclass(slots=True)
+class FinishWarmup(_UseCase):
+    async def __call__(self, learner_id: uuid.UUID, answers: list[AnswerInput]) -> ContentId:
+        plan = await self._load(learner_id)
+        try:
+            content_id = plan.finish_warmup(tuple(_answer(a) for a in answers), self.clock.now())
+        except DomainError:
+            await self.repository.save(plan)  # um aquecimento vencido foi descartado
+            raise
+        await self.repository.save(plan)
+        return content_id
+
+
+@dataclass(slots=True)
+class CancelWarmup(_UseCase):
+    async def __call__(self, learner_id: uuid.UUID) -> None:
+        plan = await self._load(learner_id)
+        try:
+            plan.cancel_warmup(self.clock.now())
+        finally:
+            await self.repository.save(plan)
 
 
 @dataclass(slots=True)
@@ -242,13 +308,35 @@ class RenameContent(_UseCase):
 @dataclass(slots=True)
 class ChangePreferences(_UseCase):
     async def __call__(
-        self, learner_id: uuid.UUID, minutes_per_day: int, rest_days: list[int]
+        self,
+        learner_id: uuid.UUID,
+        minutes_per_day: int,
+        rest_days: list[int],
+        max_in_progress: int | None = None,
     ) -> StudyPreferences:
         plan = await self._load(learner_id)
         preferences = StudyPreferences(minutes_per_day, frozenset(rest_days))
-        plan.change_preferences(preferences, self.clock.now())
+        plan.change_preferences(preferences, self.clock.now(), max_in_progress)
         await self.repository.save(plan)
         return preferences
+
+
+@dataclass(slots=True)
+class ChangePlanPurpose(_UseCase):
+    async def __call__(self, learner_id: uuid.UUID, purpose: str | None) -> None:
+        plan = await self._load(learner_id)
+        plan.change_purpose(_purpose(purpose), self.clock.now())
+        await self.repository.save(plan)
+
+
+@dataclass(slots=True)
+class ChangeContentPurpose(_UseCase):
+    async def __call__(
+        self, learner_id: uuid.UUID, content_id: uuid.UUID, purpose: str | None
+    ) -> None:
+        plan = await self._load(learner_id)
+        plan.change_content_purpose(ContentId(content_id), _purpose(purpose), self.clock.now())
+        await self.repository.save(plan)
 
 
 @dataclass(slots=True)
@@ -282,6 +370,9 @@ class LearningUseCases:
     start_session: StartSession
     finish_session: FinishSession
     cancel_session: CancelSession
+    start_warmup: StartWarmup
+    finish_warmup: FinishWarmup
+    cancel_warmup: CancelWarmup
     add_challenge: AddChallenge
     solve_challenge: SolveChallenge
     finish_content: FinishContent
@@ -290,7 +381,13 @@ class LearningUseCases:
     refresh_queue: RefreshQueue
     reorder_queue: ReorderQueue
     change_preferences: ChangePreferences
+    change_purpose: ChangePlanPurpose
+    change_content_purpose: ChangeContentPurpose
     notebooks: NotebookUseCases
+
+    async def content_counts(self, learner_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        counts = await self.get_plan.repository.content_counts([LearnerId(i) for i in learner_ids])
+        return {lid.value: count for lid, count in counts.items()}
 
     @classmethod
     def build(
@@ -311,6 +408,9 @@ class LearningUseCases:
             start_session=StartSession(*args, question_picker=question_picker),
             finish_session=FinishSession(*args),
             cancel_session=CancelSession(*args),
+            start_warmup=StartWarmup(*args, question_picker=question_picker),
+            finish_warmup=FinishWarmup(*args),
+            cancel_warmup=CancelWarmup(*args),
             add_challenge=AddChallenge(*args),
             solve_challenge=SolveChallenge(*args),
             finish_content=FinishContent(*args),
@@ -319,5 +419,7 @@ class LearningUseCases:
             refresh_queue=RefreshQueue(*args),
             reorder_queue=ReorderQueue(*args),
             change_preferences=ChangePreferences(*args),
+            change_purpose=ChangePlanPurpose(*args),
+            change_content_purpose=ChangeContentPurpose(*args),
             notebooks=NotebookUseCases(repository, notebooks, clock),
         )

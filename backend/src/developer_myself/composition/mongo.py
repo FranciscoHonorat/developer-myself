@@ -1,7 +1,10 @@
 """Composition root da infraestrutura real: Mongo (+ RabbitMQ no worker)."""
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
+
+from pymongo import AsyncMongoClient
 
 from developer_myself.composition.container import Container
 from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
@@ -24,15 +27,21 @@ from developer_myself.learning.adapters.mongo.notebook_repository import MongoNo
 from developer_myself.learning.adapters.mongo.repository import MongoStudyPlanRepository
 from developer_myself.learning.application.use_cases import LearningUseCases
 from developer_myself.learning.domain.value_objects import LearnerId
-from developer_myself.shared.adapters.mongo_setup import ensure_schema, make_client
+from developer_myself.shared.adapters.mongo_setup import Doc, ensure_schema, make_client
 from developer_myself.shared.clock import Clock, SystemClock
 from developer_myself.shared.settings import Settings
 
 
-async def build_mongo_container(settings: Settings, clock: Clock | None = None) -> Container:
+async def build_mongo_container(
+    settings: Settings,
+    clock: Clock | None = None,
+    *,
+    client: AsyncMongoClient[Doc] | None = None,
+) -> Container:
     clock = clock or SystemClock()
-    client = make_client(settings.mongo_url.get_secret_value())
-    db = client[settings.mongo_db]
+    owns_client = client is None
+    mongo_client = client or make_client(settings.mongo_url.get_secret_value())
+    db = mongo_client[settings.mongo_db]
     await ensure_schema(db)
 
     plans = MongoStudyPlanRepository(db.study_plans)
@@ -48,10 +57,12 @@ async def build_mongo_container(settings: Settings, clock: Clock | None = None) 
         await notebooks.delete_all(LearnerId(learner_id))
 
     async def ping_mongo() -> None:
-        await client.admin.command("ping")
+        await mongo_client.admin.command("ping")
 
     async def close_mongo() -> None:
-        await client.close()
+        await mongo_client.close()
+
+    closers: list[Callable[[], Awaitable[None]]] = [close_mongo] if owns_client else []
 
     return Container(
         settings=settings,
@@ -82,5 +93,5 @@ async def build_mongo_container(settings: Settings, clock: Clock | None = None) 
             store, registry, clock, min_new_labels=settings.retrain_min_new_labels
         ),
         readiness_checks={"mongo": ping_mongo},
-        closers=[close_mongo],
+        closers=closers,
     )

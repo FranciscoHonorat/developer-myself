@@ -1,5 +1,6 @@
 """Agregado `StudyPlan`: um por aprendiz, protege as invariantes I1 a I8 (ADR-0002)."""
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
@@ -13,21 +14,26 @@ from developer_myself.learning.domain.errors import (
     InvalidValueError,
     MasteryNotReachedError,
     NoActiveSessionError,
+    NoActiveWarmupError,
+    NothingToWarmUpError,
     RecallRatingRequiredError,
     RecallTestRequiredError,
     SessionAlreadyActiveError,
+    WarmupAlreadyDoneError,
 )
 from developer_myself.learning.domain.events import (
     ChallengeAdded,
     ChallengeSolved,
     ContentAdded,
     ContentFinished,
+    ContentPurposeChanged,
     ContentQueued,
     ContentRemoved,
     ContentRenamed,
     ContentUnlocked,
     DomainEvent,
     MasteryLevelReached,
+    PlanPurposeChanged,
     PointAwarded,
     PointWithheld,
     QueueReordered,
@@ -35,6 +41,7 @@ from developer_myself.learning.domain.events import (
     StudySessionAbandoned,
     StudySessionFinished,
     StudySessionStarted,
+    WarmupFinished,
 )
 from developer_myself.learning.domain.policies import (
     DefaultMasteryPolicy,
@@ -47,6 +54,8 @@ from developer_myself.learning.domain.policies import (
     UnlockPolicy,
 )
 from developer_myself.learning.domain.value_objects import (
+    MAX_PARALLEL_CONTENTS,
+    MIN_PARALLEL_CONTENTS,
     AbandonReason,
     ChallengeId,
     ContentId,
@@ -55,9 +64,13 @@ from developer_myself.learning.domain.value_objects import (
     Duration,
     Evidence,
     LearnerId,
+    LearnerQuestion,
     MasteryLevel,
     Notes,
+    Purpose,
+    QuestionSource,
     RecallAnswer,
+    RecallGrade,
     RecallQuestion,
     RecallRating,
     SessionKind,
@@ -68,6 +81,7 @@ from developer_myself.learning.domain.value_objects import (
 )
 
 SESSION_EXPIRY = timedelta(hours=4)
+WARMUP_EXPIRY = SESSION_EXPIRY
 # Escolha da vaga: olha os próximos LOOKAHEAD elegíveis da fila; cada posição a mais custa
 # AGING de afinidade, para a ordem de chegada continuar valendo e nada ficar esquecido.
 LOOKAHEAD = 5
@@ -79,6 +93,8 @@ LEVEL_NAMES = {
     MasteryLevel.ADVANCED: "Avançado",
 }
 CHALLENGE_DESCRIPTION_MAX = 2_000
+MAX_CONTENTS = 500
+MAX_CHALLENGES_PER_CONTENT = 100
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +102,13 @@ class ActiveSession:
     content_id: ContentId
     started_at: datetime
     questions: tuple[RecallQuestion, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveWarmup:
+    content_id: ContentId
+    started_at: datetime
+    questions: tuple[RecallQuestion, ...]
 
 
 def _graded_test(
@@ -97,7 +120,7 @@ def _graded_test(
     by_id = {a.question_id: a for a in answers}
     if len(answers) != len(questions) or set(by_id) != {q.id for q in questions}:
         raise RecallTestRequiredError(
-            "Responda e corrija as 3 perguntas do teste antes de finalizar."
+            f"Responda e corrija as {len(questions)} perguntas do teste antes de finalizar."
         )
     return tuple(
         {
@@ -115,6 +138,11 @@ def _graded_test(
     )
 
 
+def _learner_ids(questions: tuple[RecallQuestion, ...]) -> set[uuid.UUID]:
+    """Ids das perguntas do aprendiz usadas no teste (saem da fila ao concluir)."""
+    return {q.id for q in questions if q.source is QuestionSource.LEARNER}
+
+
 @dataclass(frozen=True, slots=True)
 class SessionOutcome:
     """Resposta de `finish_session`: o que o domínio decidiu (a UI só exibe)."""
@@ -127,6 +155,13 @@ class SessionOutcome:
     total_points: int
     level: MasteryLevel
     unlocked: ContentId | None
+    level_before: MasteryLevel = MasteryLevel.BEGINNER
+    next_level: MasteryLevel | None = None
+    points_for_next_level: int | None = None
+    challenges_solved: int = 0
+    challenges_for_next_level: int | None = None
+    recall_recalled: int = 0
+    recall_total: int = 0
 
 
 @dataclass(slots=True)
@@ -136,11 +171,15 @@ class StudyPlan:
     contents: list[Content] = field(default_factory=list)
     active_session: ActiveSession | None = None
     last_review_on: date | None = None  # dia LOCAL da última revisão qualificada
+    active_warmup: ActiveWarmup | None = None
+    last_warmup_on: date | None = None  # dia LOCAL em que o último aquecimento começou
     version: int = 0
     scoring_policy: ScoringPolicy = field(default_factory=DefaultScoringPolicy)
     mastery_policy: MasteryPolicy = field(default_factory=DefaultMasteryPolicy)
     unlock_policy: UnlockPolicy = field(default_factory=SingleTrackUnlockPolicy)
     preferences: StudyPreferences = field(default_factory=StudyPreferences)
+    purpose: Purpose | None = None  # SDT: propósito geral da trilha
+    max_in_progress: int | None = None  # SDT: autonomia (1..3); None usa o padrão da política
     _events: list[DomainEvent] = field(default_factory=list, repr=False, init=False)
 
     # ================================================================== fábrica
@@ -178,6 +217,15 @@ class StudyPlan:
     def competency_of(self, content: Content) -> str:
         return self.unlock_policy.competency_of(content.title.value)
 
+    def is_daily(self, content: Content) -> bool:
+        """Hábito diário (ex.: Inglês): faixa própria, fora das vagas."""
+        return self.competency_of(content) in self.unlock_policy.daily_competencies
+
+    @property
+    def slot_contents(self) -> list[Content]:
+        """Os em andamento que ocupam vaga (todos menos os de hábito diário)."""
+        return [c for c in self.in_progress_contents if not self.is_daily(c)]
+
     @property
     def queue(self) -> list[Content]:
         """Fila de bloqueio em ordem de chegada (I5)."""
@@ -188,6 +236,14 @@ class StudyPlan:
     def max_level(self) -> MasteryLevel:
         """O nível mais alto que a política define (hoje, Avançado)."""
         return max(self.mastery_policy.requirements(), key=lambda level: level.rank)
+
+    @property
+    def effective_max_in_progress(self) -> int:
+        """Limite efetivo de conteúdos em paralelo: escolha do aprendiz limitada pela política."""
+        policy_max = self.unlock_policy.max_in_progress
+        if self.max_in_progress is None:
+            return policy_max
+        return min(self.max_in_progress, policy_max)
 
     def requires_review(self, now: datetime) -> bool:
         """Regra 2: há algo para revisar HOJE? Quem foi consolidado hoje só conta amanhã
@@ -206,6 +262,19 @@ class StudyPlan:
     def reviewed_today(self, now: datetime) -> bool:
         return self.last_review_on == self.timezone.local_date(now)
 
+    def can_warm_up(self, content: Content) -> bool:
+        """Só se aquece o que já foi estudado e ainda aceita sessão."""
+        return content.session_kind is not None and content.session_count > 0
+
+    def warmed_up_today(self, now: datetime) -> bool:
+        return self.last_warmup_on == self.timezone.local_date(now)
+
+    def current_warmup(self, now: datetime) -> ActiveWarmup | None:
+        warmup = self.active_warmup
+        if warmup is None or now - warmup.started_at > WARMUP_EXPIRY:
+            return None
+        return warmup
+
     def is_expired(self, now: datetime) -> bool:
         return self.active_session is not None and (
             now - self.active_session.started_at > SESSION_EXPIRY
@@ -213,12 +282,24 @@ class StudyPlan:
 
     # ================================================================== comandos
     def add_content(
-        self, content_id: ContentId, title: Title, kind: ContentKind, now: datetime
+        self,
+        content_id: ContentId,
+        title: Title,
+        kind: ContentKind,
+        now: datetime,
+        purpose: Purpose | None = None,
     ) -> Content:
+        if len(self.contents) >= MAX_CONTENTS:
+            raise InvalidValueError(f"A trilha aceita no máximo {MAX_CONTENTS} conteúdos.")
         if self.find_by_title(title.value) is not None:
             raise DuplicateContentError(f"Já existe um conteúdo chamado {title.value!r}.")
         content = Content(
-            id=content_id, title=title, kind=kind, status=ContentStatus.LOCKED, queued_at=now
+            id=content_id,
+            title=title,
+            kind=kind,
+            status=ContentStatus.LOCKED,
+            queued_at=now,
+            purpose=purpose,
         )
         self.contents.append(content)
         self._record(
@@ -258,6 +339,7 @@ class StudyPlan:
         kind = content.session_kind
         if kind is None:
             raise ContentLockedError(self.lock_reason(content))
+        self.active_warmup = None  # estudar nunca é bloqueado pelo aquecimento
         self.active_session = ActiveSession(
             content_id=content_id,
             started_at=now,
@@ -280,6 +362,7 @@ class StudyPlan:
         now: datetime,
         recall: RecallRating | None = None,
         answers: tuple[RecallAnswer, ...] = (),
+        future_question: LearnerQuestion | None = None,
     ) -> SessionOutcome:
         session = self._require_active_session()
         content = self.content(session.content_id)
@@ -326,6 +409,10 @@ class StudyPlan:
         last_rating_before = int(content.last_recall_rating) if content.last_recall_rating else None
         self.active_session = None
         content._register_session(now, kind, notes.char_count, rating, notes.to_review)
+        content._consume_learner_questions(_learner_ids(session.questions))
+        kept = future_question if kind is SessionKind.STUDY else None
+        if kept is not None:
+            content._add_learner_question(kept)
 
         if result.awarded:
             content._award_point()
@@ -379,9 +466,16 @@ class StudyPlan:
                 avg_notes_chars_before=avg_notes_before,
                 last_recall_rating_before=last_rating_before,
                 recall_test=recall_test,
+                future_question=(
+                    {"id": kept.id, "text": kept.text, "answer": kept.answer}
+                    if kept is not None
+                    else None
+                ),
             )
         )
         unlocked = self._on_level_change(content, level_before, now)
+        nxt, pts_req, ch_solved, ch_req = self._next_level_progress(content)
+        recalled = sum(1 for item in recall_test if item["grade"] is RecallGrade.RECALLED)
         return SessionOutcome(
             content_id=content.id,
             kind=kind,
@@ -391,6 +485,13 @@ class StudyPlan:
             total_points=content.points.value,
             level=level_after,
             unlocked=unlocked,
+            level_before=level_before,
+            next_level=nxt,
+            points_for_next_level=pts_req,
+            challenges_solved=ch_solved,
+            challenges_for_next_level=ch_req,
+            recall_recalled=recalled,
+            recall_total=len(recall_test),
         )
 
     def backfill_last_to_review(self, content_id: ContentId, text: str) -> bool:
@@ -400,6 +501,53 @@ class StudyPlan:
             return False
         content.last_to_review = text
         return True
+
+    def start_warmup(
+        self, content_id: ContentId, questions: tuple[RecallQuestion, ...], now: datetime
+    ) -> ActiveWarmup:
+        """Inicia (ou devolve o já iniciado: recarregar não troca as perguntas)."""
+        self.active_warmup = self.current_warmup(now)
+        if self.active_warmup is not None:
+            return self.active_warmup
+        if self.active_session is not None:
+            raise SessionAlreadyActiveError("Finalize a sessão em andamento antes de aquecer.")
+        if self.warmed_up_today(now):
+            raise WarmupAlreadyDoneError("O aquecimento de hoje já foi feito.")
+        content = self.content(content_id)
+        if not self.can_warm_up(content):
+            raise NothingToWarmUpError(f"{content.title} ainda não tem o que aquecer.")
+        self.active_warmup = ActiveWarmup(content_id, now, questions)
+        return self.active_warmup
+
+    def finish_warmup(self, answers: tuple[RecallAnswer, ...], now: datetime) -> ContentId:
+        warmup = self.current_warmup(now)
+        if warmup is None:
+            self.active_warmup = None
+            raise NoActiveWarmupError("Não há aquecimento em andamento.")
+        recall_test = _graded_test(warmup.questions, answers)
+        content = self.content(warmup.content_id)
+        self.active_warmup = None
+        self.last_warmup_on = self.timezone.local_date(warmup.started_at)
+        content._consume_learner_questions(_learner_ids(warmup.questions))
+        self._record(
+            WarmupFinished(
+                learner_id=self.id.value,
+                occurred_at=now,
+                content_id=content.id.value,
+                content_title=content.title.value,
+                started_at=warmup.started_at,
+                finished_at=now,
+                duration_seconds=Duration.between(warmup.started_at, now).total_seconds,
+                recall_test=recall_test,
+            )
+        )
+        return content.id
+
+    def cancel_warmup(self, now: datetime) -> None:
+        if self.current_warmup(now) is None:
+            self.active_warmup = None
+            raise NoActiveWarmupError("Não há aquecimento em andamento.")
+        self.active_warmup = None
 
     def cancel_session(self, now: datetime) -> None:
         session = self._require_active_session()
@@ -415,6 +563,10 @@ class StudyPlan:
         now: datetime,
     ) -> Challenge:
         content = self.content(content_id)
+        if len(content.challenges) >= MAX_CHALLENGES_PER_CONTENT:
+            raise InvalidValueError(
+                f"Cada conteúdo aceita no máximo {MAX_CHALLENGES_PER_CONTENT} desafios."
+            )
         cleaned = description.strip()
         if not cleaned:
             raise InvalidValueError("A descrição do desafio não pode ser vazia.")
@@ -547,16 +699,62 @@ class StudyPlan:
             )
         )
 
-    def change_preferences(self, preferences: StudyPreferences, now: datetime) -> None:
-        if preferences == self.preferences:
-            return
+    def change_preferences(
+        self,
+        preferences: StudyPreferences,
+        now: datetime,
+        max_in_progress: int | None = None,
+    ) -> list[ContentId]:
+        if max_in_progress is not None and not (
+            MIN_PARALLEL_CONTENTS <= max_in_progress <= MAX_PARALLEL_CONTENTS
+        ):
+            raise InvalidValueError(
+                f"Escolha entre {MIN_PARALLEL_CONTENTS} e {MAX_PARALLEL_CONTENTS} "
+                "conteúdos em paralelo."
+            )
+        prefs_changed = preferences != self.preferences
+        slots_changed = max_in_progress is not None and max_in_progress != self.max_in_progress
+        if not prefs_changed and not slots_changed:
+            return []
         self.preferences = preferences
+        if max_in_progress is not None:
+            self.max_in_progress = max_in_progress
         self._record(
             StudyPreferencesChanged(
                 learner_id=self.id.value,
                 occurred_at=now,
                 minutes_per_day=preferences.minutes_per_day,
                 rest_days=tuple(sorted(preferences.rest_days)),
+                max_in_progress=self.max_in_progress,
+            )
+        )
+        return self._unlock_available(now) if slots_changed else []
+
+    def change_purpose(self, purpose: Purpose | None, now: datetime) -> None:
+        if purpose == self.purpose:
+            return
+        self.purpose = purpose
+        self._record(
+            PlanPurposeChanged(
+                learner_id=self.id.value,
+                occurred_at=now,
+                purpose=purpose.value if purpose else None,
+            )
+        )
+
+    def change_content_purpose(
+        self, content_id: ContentId, purpose: Purpose | None, now: datetime
+    ) -> None:
+        content = self.content(content_id)
+        if purpose == content.purpose:
+            return
+        content.purpose = purpose
+        self._record(
+            ContentPurposeChanged(
+                learner_id=self.id.value,
+                occurred_at=now,
+                content_id=content_id.value,
+                purpose=purpose.value if purpose else None,
             )
         )
 
@@ -602,6 +800,8 @@ class StudyPlan:
                 reason=WithheldReason.EXPIRED,
             )
         )
+        level = self.level_of(content)
+        nxt, pts_req, ch_solved, ch_req = self._next_level_progress(content)
         return SessionOutcome(
             content_id=content.id,
             kind=kind,
@@ -609,9 +809,29 @@ class StudyPlan:
             awarded=False,
             reason=WithheldReason.EXPIRED,
             total_points=content.points.value,
-            level=self.level_of(content),
+            level=level,
             unlocked=None,
+            level_before=level,
+            next_level=nxt,
+            points_for_next_level=pts_req,
+            challenges_solved=ch_solved,
+            challenges_for_next_level=ch_req,
         )
+
+    def _next_level_progress(
+        self, content: Content
+    ) -> tuple[MasteryLevel | None, int | None, int, int | None]:
+        level = self.level_of(content)
+        requirements = self.mastery_policy.requirements()
+        nxt = next(
+            (lvl for lvl in sorted(requirements, key=lambda x: x.rank) if lvl.rank > level.rank),
+            None,
+        )
+        if nxt is None:
+            return None, None, 0, None
+        points_req, challenges_req = requirements[nxt]
+        solved = sum(1 for lvl in content.solved_challenge_levels if lvl is nxt)
+        return nxt, points_req, solved, challenges_req
 
     def _on_level_change(
         self, content: Content, level_before: MasteryLevel, now: datetime
@@ -627,8 +847,10 @@ class StudyPlan:
                 level=level_after,
             )
         )
-        if content.status is ContentStatus.IN_PROGRESS and level_after.at_least(
-            MasteryLevel.INTERMEDIATE
+        if (
+            content.status is ContentStatus.IN_PROGRESS
+            and level_after.at_least(MasteryLevel.INTERMEDIATE)
+            and not self.is_daily(content)  # hábito diário segue em andamento até concluir
         ):
             content._consolidate(now)
             return self._unlock_next(now)
@@ -646,9 +868,11 @@ class StudyPlan:
         """
         unlocked: list[ContentId] = []
         policy = self.unlock_policy
-        while len(self.in_progress_contents) < policy.max_in_progress:
-            busy = {self.competency_of(c) for c in self.in_progress_contents}
-            eligible = [c for c in self.queue if self.competency_of(c) not in busy][:LOOKAHEAD]
+        while len(self.slot_contents) < self.effective_max_in_progress:
+            busy = {self.competency_of(c) for c in self.slot_contents}
+            eligible = [
+                c for c in self.queue if self.competency_of(c) not in busy and not self.is_daily(c)
+            ][:LOOKAHEAD]
             if not eligible:
                 break
 
@@ -664,25 +888,40 @@ class StudyPlan:
                 ContentUnlocked(learner_id=self.id.value, occurred_at=now, content_id=nxt.id.value)
             )
             unlocked.append(nxt.id)
+        for competency in sorted(policy.daily_competencies):
+            # Faixa diária: 1 por competência, o primeiro que chegou; não disputa vaga.
+            if any(self.competency_of(c) == competency for c in self.in_progress_contents):
+                continue
+            habit = next((c for c in self.queue if self.competency_of(c) == competency), None)
+            if habit is not None:
+                habit._unlock()
+                self._record(
+                    ContentUnlocked(
+                        learner_id=self.id.value, occurred_at=now, content_id=habit.id.value
+                    )
+                )
+                unlocked.append(habit.id)
         return unlocked
 
     def _blocker(self, content: Content) -> Content | None:
         """Quem segura este conteúdo: o da mesma competência ou, sem vaga, o primeiro."""
-        active = self.in_progress_contents
         comp = self.competency_of(content)
-        same = next((c for c in active if self.competency_of(c) == comp), None)
-        return same or (active[0] if active else None)
+        same = next((c for c in self.in_progress_contents if self.competency_of(c) == comp), None)
+        slots = self.slot_contents
+        return same or (slots[0] if slots else None)
 
     def lock_reason(self, content: Content) -> str:
-        active = self.in_progress_contents
         comp = self.competency_of(content)
-        same = next((c for c in active if self.competency_of(c) == comp), None)
+        same = next((c for c in self.in_progress_contents if self.competency_of(c) == comp), None)
+        if same is not None and self.is_daily(same):
+            return f"{content.title} está na fila: conclua {same.title}, o seu hábito diário."
         if same is not None:
             return (
                 f"{content.title} está bloqueado: conclua {same.title} "
                 "ou chegue a Intermediário nele."
             )
-        if len(active) >= self.unlock_policy.max_in_progress:
+        active = self.slot_contents
+        if len(active) >= self.effective_max_in_progress:
             return (
                 f"{content.title} está na fila: já há {len(active)} conteúdos em andamento; "
                 "chegue a Intermediário em um deles para abrir uma vaga."
