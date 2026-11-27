@@ -24,13 +24,13 @@ async def main() -> None:
     if settings.rabbit_url is None:
         raise SystemExit("DM_RABBIT_URL é obrigatório para o worker.")
 
-    container = await build_mongo_container(settings)
     client = make_client(settings.mongo_url.get_secret_value())
+    container = await build_mongo_container(settings, client=client)
     connection = await aio_pika.connect_robust(settings.rabbit_url.get_secret_value())
 
     publisher = await RabbitPublisher.create(connection)
     relay = OutboxRelay(client[settings.mongo_db].study_plans, publisher.publish)
-    await consume_session_history(connection, container.record_history)
+    consumer_channel = await consume_session_history(connection, container.record_history)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -46,9 +46,11 @@ async def main() -> None:
                 container.retrain_job.run_forever(settings.retrain_interval_seconds, stop)
             )
     finally:
+        with contextlib.suppress(Exception):
+            await consumer_channel.close()
         await connection.close()
-        await client.close()
         await container.close()
+        await client.close()
         log.info("worker_stopped")
 
 

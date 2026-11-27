@@ -1,4 +1,11 @@
-import type { ContentKind, ContentStatus, MasteryLevel, RecallGrade, SessionKind } from "./types";
+import type {
+  ContentKind,
+  ContentStatus,
+  HistoryKind,
+  MasteryLevel,
+  RecallGrade,
+  SessionKind,
+} from "./types";
 
 export const LEVEL_LABEL: Record<MasteryLevel, string> = {
   BEGINNER: "Iniciante",
@@ -24,6 +31,11 @@ export const KIND_LABEL: Record<ContentKind, string> = {
 export const SESSION_LABEL: Record<SessionKind, string> = {
   STUDY: "Estudo",
   REVIEW: "Revisão",
+};
+
+export const HISTORY_LABEL: Record<HistoryKind, string> = {
+  ...SESSION_LABEL,
+  WARMUP: "Aquecimento",
 };
 
 /** Escala de autoavaliação (Anki/FSRS): o rótulo real da rede neural. */

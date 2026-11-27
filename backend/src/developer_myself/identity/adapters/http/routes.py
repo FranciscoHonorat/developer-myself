@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
@@ -81,27 +82,55 @@ def _set_cookie(response: Response, settings: Settings, token: str) -> None:
     )
 
 
+def _delete_cookie(response: Response, settings: Settings) -> None:
+    response.delete_cookie(
+        settings.cookie_name,
+        path="/",
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="strict",
+    )
+
+
+def _validate_timezone(name: str) -> None:
+    try:
+        ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise http_error(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            f"Fuso horário desconhecido: {name!r}.",
+            "InvalidValueError",
+        ) from exc
+
+
 async def _login(
     request: Request, response: Response, uc: IdentityUseCases, body: CredentialsIn
 ) -> None:
     client = request.client.host if request.client else "unknown"
     limiter = request.app.state.login_limiter
-    # Mesma normalização do VO `Username`: " Jose " e "jose" contam no mesmo balde.
-    account_key = f"username:{body.username.strip().lower()}"
-    if not limiter.allow(f"ip:{client}") or not limiter.allow(account_key):
+    # Chave por IP e por par (IP + username normalizado): impede brute-force sem permitir
+    # que um atacante em outros IPs tranque (DoS) a conta da vítima.
+    pair_key = f"pair:{client}:{body.username.strip().lower()}"
+    if not limiter.allow(f"ip:{client}") or not limiter.allow(pair_key):
         raise http_error(
             status.HTTP_429_TOO_MANY_REQUESTS, "Muitas tentativas. Aguarde.", "RATE_LIMIT"
         )
     token, _ = await uc.login(body.username, body.password)
-    limiter.reset(account_key)
+    limiter.reset(pair_key)
     _set_cookie(response, request.app.state.settings, token.raw)
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterIn, request: Request, response: Response, uc: Identity) -> MeOut:
+    _validate_timezone(body.timezone)
     user = await uc.register(body.username, body.email, body.password)
     # Composição entre contextos só por ID: a trilha nasce com o id do usuário.
-    await request.app.state.container.learning.create_plan(user.id.value, body.timezone)
+    # Se a criação da trilha falhar, compensa removendo a conta para não deixar usuário órfão.
+    try:
+        await request.app.state.container.learning.create_plan(user.id.value, body.timezone)
+    except Exception:
+        await uc.users.delete(user.id)
+        raise
     await _login(request, response, uc, body)
     return MeOut.of(user, uc)
 
@@ -115,7 +144,7 @@ async def login(body: CredentialsIn, request: Request, response: Response, uc: I
 async def logout(request: Request, response: Response, uc: Identity) -> None:
     settings: Settings = request.app.state.settings
     await uc.logout(request.cookies.get(settings.cookie_name))
-    response.delete_cookie(settings.cookie_name, path="/")
+    _delete_cookie(response, settings)
 
 
 @router.get("/me")
@@ -143,8 +172,14 @@ EraseData = Callable[[uuid.UUID], Awaitable[None]]
 async def delete_account(
     body: PasswordIn, request: Request, response: Response, learner_id: LearnerIdDep, uc: Identity
 ) -> None:
-    """LGPD: exclui conta, trilha e histórico."""
-    await uc.delete_account(UserId(learner_id), body.password)
+    """LGPD: exclui trilha, histórico, cadernos e, por último, sessões e conta.
+
+    Apagar os dados de estudo antes da conta garante que, se ocorrer erro no meio, a
+    sessão continua válida para o usuário tentar de novo sem deixar dados órfãos.
+    """
+    user_id = UserId(learner_id)
+    await uc.verify_password(user_id, body.password)
     erase: EraseData = request.app.state.container.erase_learner_data
     await erase(learner_id)
-    response.delete_cookie(request.app.state.settings.cookie_name, path="/")
+    await uc.finalize_delete_account(user_id)
+    _delete_cookie(response, request.app.state.settings)

@@ -74,3 +74,22 @@ def test_reorder_queue_validations_and_event() -> None:
     (event,) = plan.pull_events()
     assert isinstance(event, QueueReordered)
     assert event.order == (ids[2].value, ids[1].value)
+
+
+def test_second_daily_content_waits_for_the_first_to_finish() -> None:
+    # Títulos fora do catálogo caem em "outros"; aqui "outros" faz o papel do Inglês.
+    plan = StudyPlan.create(LearnerId.new(), Timezone("UTC"))
+    plan.unlock_policy = CatalogUnlockPolicy(daily_competencies=frozenset({"outros"}))
+    first = plan.add_content(ContentId.new(), Title("Inglês 1"), ContentKind.BOOK, NOW)
+    second = plan.add_content(ContentId.new(), Title("Inglês 2"), ContentKind.BOOK, NOW)
+    assert first.status is ContentStatus.IN_PROGRESS
+    assert plan.slot_contents == []
+    assert second.status is ContentStatus.LOCKED
+    assert (
+        plan.lock_reason(second) == "Inglês 2 está na fila: conclua Inglês 1, o seu hábito diário."
+    )
+
+
+def test_catalog_policy_makes_english_a_daily_habit() -> None:
+    assert CatalogUnlockPolicy().daily_competencies == frozenset({"ingles"})
+    assert SingleTrackUnlockPolicy().daily_competencies == frozenset()

@@ -59,7 +59,10 @@ def morning(plan: StudyPlan, day: date) -> datetime:
 
 def day_blocks(plan: StudyPlan, recommender: ReviewRecommender, now: datetime) -> WeekDay:
     """O dia de hoje montado a partir do estado atual da trilha."""
-    study = sorted(plan.in_progress_contents, key=lambda c: c.queued_at)
+    study = sorted(plan.slot_contents, key=lambda c: c.queued_at)
+    daily = sorted(
+        (c for c in plan.in_progress_contents if plan.is_daily(c)), key=lambda c: c.queued_at
+    )
     pending = {
         str(c.id): c
         for c in plan.contents
@@ -72,6 +75,7 @@ def day_blocks(plan: StudyPlan, recommender: ReviewRecommender, now: datetime) -
         minutes_per_day=plan.preferences.minutes_per_day,
         rest_days=plan.preferences.rest_days,
         start=local_day(plan, now),
+        daily=[track_for(c) for c in daily],
     )[0]
 
 

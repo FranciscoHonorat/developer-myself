@@ -54,6 +54,21 @@ afterEach(() => {
 });
 
 describe("NotebookEditor", () => {
+  // O campo cresce com o texto (field-sizing-content); sem teto, a página vira um rolo infinito.
+  it("tem altura máxima e rola por dentro, na sessão e na página do Caderno", async () => {
+    mockApi(okPut);
+    const { unmount } = renderWithClient(<NotebookEditor contentId="c1" title="Clean Code" />);
+    const inSession = await screen.findByLabelText("Caderno de Clean Code");
+    expect(inSession.className).toMatch(/max-h-\[50dvh\]/);
+    expect(inSession.className).toMatch(/overflow-y-auto/);
+    unmount();
+
+    renderWithClient(<NotebookEditor contentId="c1" title="Clean Code" tall />);
+    const page = await screen.findByLabelText("Caderno de Clean Code");
+    expect(page.className).toMatch(/max-h-\[75dvh\]/);
+    expect(page.className).toMatch(/overflow-y-auto/);
+  });
+
   it("carrega o texto do caderno", async () => {
     mockApi(okPut);
     const { field } = await renderLoaded();

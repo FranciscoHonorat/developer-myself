@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 /** Volta para a rota que pediu login (guardada pelo RequireAuth), ou para o Hoje. */
 function destination(state: unknown): string {
   const from = (state as { from?: Location } | null)?.from;
-  return from ? `${from.pathname}${from.search}` : "/hoje";
+  if (!from?.pathname.startsWith("/") || from.pathname.startsWith("//")) return "/hoje";
+  return `${from.pathname}${from.search}`;
 }
 
 const METHOD = [
@@ -41,7 +42,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [hint, setHint] = useState<string | null>(null);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const isLogin = mode === "login";
-  const registration = useRegistrationStatus();
+  const registration = useRegistrationStatus(!isLogin);
 
   const submit = useAuthCommand(() =>
     isLogin ? api.login(username, password) : api.register(username, email, password, timezone),

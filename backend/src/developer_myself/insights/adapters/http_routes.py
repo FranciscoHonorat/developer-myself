@@ -86,6 +86,10 @@ class StatsOut(BaseModel):
     current_streak_days: int
     withheld_by_reason: dict[str, int]
     daily: list[DailyOut]
+    recall_questions_total: int = 0
+    recall_questions_recalled: int = 0
+    recall_questions_partial: int = 0
+    recall_accuracy: float | None = None
 
 
 def get_history(request: Request) -> HistoryQueries:
@@ -140,4 +144,8 @@ async def stats(
             DailyOut(day=d.day, sessions=d.sessions, minutes=d.minutes, points=d.points)
             for d in s.daily
         ],
+        recall_questions_total=s.recall_questions_total,
+        recall_questions_recalled=s.recall_questions_recalled,
+        recall_questions_partial=s.recall_questions_partial,
+        recall_accuracy=s.recall_accuracy,
     )

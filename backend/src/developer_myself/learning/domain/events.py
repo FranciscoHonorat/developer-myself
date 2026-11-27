@@ -89,6 +89,20 @@ class StudySessionFinished(DomainEvent):
     last_recall_rating_before: int | None = None
     # Teste de memória da revisão (dataset da IA): um item por pergunta, na ordem.
     recall_test: tuple[dict[str, object], ...] = ()
+    # Pergunta para o "eu do futuro" deixada neste estudo: {id, text, answer}.
+    future_question: dict[str, object] | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WarmupFinished(DomainEvent):
+    """Aquecimento concluído: teste de memória fora de sessão, sem ponto."""
+
+    content_id: uuid.UUID
+    content_title: str
+    started_at: datetime
+    finished_at: datetime
+    duration_seconds: int
+    recall_test: tuple[dict[str, object], ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -162,3 +176,15 @@ class QueueReordered(DomainEvent):
 class StudyPreferencesChanged(DomainEvent):
     minutes_per_day: int
     rest_days: tuple[int, ...]
+    max_in_progress: int | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlanPurposeChanged(DomainEvent):
+    purpose: str | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ContentPurposeChanged(DomainEvent):
+    content_id: uuid.UUID
+    purpose: str | None

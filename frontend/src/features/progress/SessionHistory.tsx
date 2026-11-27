@@ -1,12 +1,12 @@
-import { CircleCheck, CircleSlash } from "lucide-react";
+import { CircleCheck, CircleSlash, Flame } from "lucide-react";
 import { useHistory, useStats } from "@/api/hooks";
 import {
   formatDuration,
   GRADE_LABEL,
+  HISTORY_LABEL,
   LEVEL_LABEL,
   REASON_LABEL,
   RECALL_LABEL,
-  SESSION_LABEL,
 } from "@/api/labels";
 import type { RecallGrade } from "@/api/types";
 import { ErrorState } from "@/components/ErrorState";
@@ -31,12 +31,21 @@ export function SessionHistory() {
       {stats.data && (
         <section
           aria-label="Estatísticas dos últimos 30 dias"
-          className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+          className={cn(
+            "grid grid-cols-2 gap-3",
+            stats.data.recall_accuracy != null ? "sm:grid-cols-5" : "sm:grid-cols-4",
+          )}
         >
           <Stat label="Sequência" value={`${stats.data.current_streak_days} dias`} />
           <Stat label="Pontos (30d)" value={stats.data.total_points} />
           <Stat label="Sessões (30d)" value={stats.data.total_sessions} />
           <Stat label="Horas (30d)" value={(stats.data.total_minutes / 60).toFixed(1)} />
+          {stats.data.recall_accuracy != null && (
+            <Stat
+              label={`Domínio (${stats.data.recall_questions_recalled ?? 0}/${stats.data.recall_questions_total ?? 0})`}
+              value={`${stats.data.recall_accuracy}%`}
+            />
+          )}
         </section>
       )}
       {stats.data && stats.data.daily.length > 0 && (
@@ -89,7 +98,9 @@ export function SessionHistory() {
             <li key={s.event_id} className="flex flex-col gap-2 rounded-xl border bg-card p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <strong className="flex items-center gap-2 font-medium">
-                  {s.awarded ? (
+                  {s.kind === "WARMUP" ? (
+                    <Flame aria-label="aquecimento" className="size-4 text-primary" />
+                  ) : s.awarded ? (
                     <CircleCheck aria-label="pontuou" className="size-4 text-primary" />
                   ) : (
                     <CircleSlash aria-label="sem ponto" className="size-4 text-muted-foreground" />
@@ -101,7 +112,7 @@ export function SessionHistory() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                {SESSION_LABEL[s.kind]} · {formatDuration(s.duration_seconds)}
+                {HISTORY_LABEL[s.kind]} · {formatDuration(s.duration_seconds)}
                 {s.level_after && ` · ${LEVEL_LABEL[s.level_after]}`}
                 {s.recall_rating && ` · lembrava: ${RECALL_LABEL[s.recall_rating]}`}
                 {s.reason && ` · ${REASON_LABEL[s.reason] ?? s.reason}`}

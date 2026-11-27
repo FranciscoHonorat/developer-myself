@@ -16,6 +16,8 @@ class SlidingWindowLimiter:
     window_seconds: float
     # A cada N chamadas, apaga as chaves cujos acertos já saíram da janela (IPs que sumiram).
     sweep_every: int = 1_000
+    # Teto de chaves em memória: impede exaustão por flood de IPs/usernames aleatórios.
+    max_keys: int = 50_000
     _hits: dict[str, deque[float]] = field(default_factory=lambda: defaultdict(deque))
     _calls: int = 0
 
@@ -29,6 +31,10 @@ class SlidingWindowLimiter:
         self._calls += 1
         if self._calls % self.sweep_every == 0:
             self._sweep(moment)
+        if key not in self._hits and len(self._hits) >= self.max_keys:
+            self._sweep(moment)
+            while len(self._hits) >= self.max_keys:
+                del self._hits[next(iter(self._hits))]
         hits = self._hits[key]
         while hits and moment - hits[0] >= self.window_seconds:
             hits.popleft()

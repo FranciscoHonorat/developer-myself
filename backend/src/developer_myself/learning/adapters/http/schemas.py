@@ -11,9 +11,15 @@ from developer_myself.learning.domain.notebook import NOTEBOOK_MAX_CHARS, Notebo
 from developer_myself.learning.domain.study_plan import SESSION_EXPIRY, SessionOutcome, StudyPlan
 from developer_myself.learning.domain.value_objects import (
     ANSWER_MAX_LENGTH,
+    LEARNER_ANSWER_MAX_LENGTH,
+    MAX_PARALLEL_CONTENTS,
+    MIN_PARALLEL_CONTENTS,
+    PURPOSE_MAX_LENGTH,
+    QUESTION_MAX_LENGTH,
     ContentKind,
     ContentStatus,
     MasteryLevel,
+    RecallQuestion,
 )
 
 
@@ -24,15 +30,23 @@ class _In(BaseModel):
 class AddContentIn(_In):
     title: StrictStr = Field(min_length=1, max_length=200)
     kind: ContentKind = ContentKind.BOOK
+    purpose: StrictStr | None = Field(default=None, max_length=PURPOSE_MAX_LENGTH)
 
 
 class RenameContentIn(_In):
     title: StrictStr = Field(min_length=1, max_length=200)
 
 
+class PurposeIn(_In):
+    purpose: StrictStr | None = Field(default=None, max_length=PURPOSE_MAX_LENGTH)
+
+
 class PreferencesIn(_In):
     minutes_per_day: int = Field(ge=60, le=480, strict=True)
     rest_days: list[int] = Field(default_factory=list, max_length=6)
+    max_in_progress: int | None = Field(
+        default=None, ge=MIN_PARALLEL_CONTENTS, le=MAX_PARALLEL_CONTENTS, strict=True
+    )
 
 
 class ReorderQueueIn(_In):
@@ -50,11 +64,21 @@ class AnswerIn(_In):
     useful: bool | None = None
 
 
+class FutureQuestionIn(_In):
+    text: StrictStr = Field(min_length=1, max_length=QUESTION_MAX_LENGTH)
+    answer: StrictStr | None = Field(default=None, max_length=LEARNER_ANSWER_MAX_LENGTH)
+
+
 class FinishSessionIn(_In):
     studied: StrictStr = Field(default="", max_length=10_000)
     understood: StrictStr = Field(default="", max_length=10_000)
     to_review: StrictStr = Field(default="", max_length=10_000)
     recall_rating: int | None = Field(default=None, ge=1, le=4, strict=True)
+    answers: list[AnswerIn] = Field(default_factory=list, max_length=10)
+    future_question: FutureQuestionIn | None = None
+
+
+class FinishWarmupIn(_In):
     answers: list[AnswerIn] = Field(default_factory=list, max_length=10)
 
 
@@ -123,6 +147,8 @@ class ContentOut(BaseModel):
     lock_reason: str | None
     challenges: list[ChallengeOut]
     last_to_review: str | None
+    purpose: str | None = None
+    daily: bool  # hábito diário (ex.: Inglês): em andamento fora das vagas
 
     @classmethod
     def of(cls, plan: StudyPlan, c: Content) -> ContentOut:
@@ -154,10 +180,12 @@ class ContentOut(BaseModel):
             queued_at=c.queued_at,
             finished_at=c.finished_at,
             last_session_at=c.last_session_at,
+            daily=plan.is_daily(c),
             queue_position=position,
             lock_reason=plan.lock_reason(c) if c.status is ContentStatus.LOCKED else None,
             challenges=[ChallengeOut.of(ch) for ch in c.challenges],
             last_to_review=c.last_to_review,
+            purpose=c.purpose.value if c.purpose else None,
         )
 
 
@@ -165,11 +193,17 @@ class QuestionOut(BaseModel):
     id: uuid.UUID
     text: str
     source: str
+    expected_answer: str | None = None
+
+    @classmethod
+    def of(cls, q: RecallQuestion) -> QuestionOut:
+        return cls(id=q.id, text=q.text, source=q.source.value, expected_answer=q.expected_answer)
 
 
 class ActiveSessionOut(BaseModel):
     content_id: uuid.UUID
     content_title: str
+    content_purpose: str | None = None
     kind: str | None
     started_at: datetime
     expires_at: datetime
@@ -184,6 +218,7 @@ class PreferencesOut(BaseModel):
 
 class PlanOut(BaseModel):
     timezone: str
+    purpose: str | None = None
     preferences: PreferencesOut
     max_in_progress: int
     server_time: datetime
@@ -202,23 +237,22 @@ class PlanOut(BaseModel):
             active = ActiveSessionOut(
                 content_id=content.id.value,
                 content_title=content.title.value,
+                content_purpose=content.purpose.value if content.purpose else None,
                 kind=kind.value if kind else None,
                 started_at=plan.active_session.started_at,
                 expires_at=plan.active_session.started_at + SESSION_EXPIRY,
-                questions=[
-                    QuestionOut(id=q.id, text=q.text, source=q.source.value)
-                    for q in plan.active_session.questions
-                ],
+                questions=[QuestionOut.of(q) for q in plan.active_session.questions],
                 last_to_review=content.last_to_review,
             )
         reviewed = plan.reviewed_today(now)
         return cls(
             timezone=plan.timezone.name,
+            purpose=plan.purpose.value if plan.purpose else None,
             preferences=PreferencesOut(
                 minutes_per_day=plan.preferences.minutes_per_day,
                 rest_days=sorted(plan.preferences.rest_days),
             ),
-            max_in_progress=plan.unlock_policy.max_in_progress,
+            max_in_progress=plan.effective_max_in_progress,
             server_time=now,
             last_review_on=plan.last_review_on,
             reviewed_today=reviewed,
@@ -241,6 +275,13 @@ class OutcomeOut(BaseModel):
     total_points: int
     level: MasteryLevel
     unlocked_content_id: uuid.UUID | None
+    level_before: MasteryLevel
+    next_level: MasteryLevel | None
+    points_for_next_level: int | None
+    challenges_solved: int
+    challenges_for_next_level: int | None
+    recall_recalled: int
+    recall_total: int
 
     @classmethod
     def of(cls, o: SessionOutcome) -> OutcomeOut:
@@ -253,6 +294,13 @@ class OutcomeOut(BaseModel):
             total_points=o.total_points,
             level=o.level,
             unlocked_content_id=o.unlocked.value if o.unlocked else None,
+            level_before=o.level_before,
+            next_level=o.next_level,
+            points_for_next_level=o.points_for_next_level,
+            challenges_solved=o.challenges_solved,
+            challenges_for_next_level=o.challenges_for_next_level,
+            recall_recalled=o.recall_recalled,
+            recall_total=o.recall_total,
         )
 
 

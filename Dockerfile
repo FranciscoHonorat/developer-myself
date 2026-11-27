@@ -23,7 +23,7 @@ RUN poetry sync --only main
 # ---------- 3. runtime
 FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
-    DM_STATIC_DIR=/app/web
+    DM_STATIC_DIR=/app/web FORWARDED_ALLOW_IPS=127.0.0.1
 RUN useradd --system --uid 10001 --no-create-home app
 WORKDIR /app
 COPY --from=build /app/.venv ./.venv

@@ -62,6 +62,7 @@ from developer_myself.planning.adapters.http import (
     competency_routes,
     recommendation_routes,
     schedule_routes,
+    warmup_routes,
 )
 from developer_myself.shared.adapters.http import (
     RateLimitMiddleware,
@@ -227,7 +228,14 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         finally:
             await built.close()
 
-    app = FastAPI(title="Developer Myself", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title="Developer Myself",
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if settings.enable_docs else None,
+        redoc_url="/redoc" if settings.enable_docs else None,
+        openapi_url="/openapi.json" if settings.enable_docs else None,
+    )
     app.state.settings = settings
     app.state.login_limiter = SlidingWindowLimiter(max_hits=10, window_seconds=60)
     if container is not None:  # testes sem lifespan
@@ -235,7 +243,11 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         app.state.authenticate = _authenticator(container)
     # O último adicionado é o mais externo: o 429 ainda ganha correlation id e cabeçalhos.
     app.add_middleware(RateLimitMiddleware, rules=rate_limit_rules(settings))
-    app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(
+        RequestContextMiddleware,
+        cookie_secure=settings.cookie_secure,
+        max_body_bytes=settings.max_request_body_bytes,
+    )
     _install_error_handlers(app)
 
     for module in (
@@ -247,6 +259,7 @@ def create_app(settings: Settings | None = None, container: Container | None = N
         recommendation_routes,
         schedule_routes,
         competency_routes,
+        warmup_routes,
     ):
         app.include_router(module.router)
 

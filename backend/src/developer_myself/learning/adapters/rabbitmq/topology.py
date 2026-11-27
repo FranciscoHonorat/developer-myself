@@ -1,7 +1,8 @@
 """Topologia RabbitMQ 4.x (ADR-0006).
 
 exchange learning.events (topic, durable)
-  └─ learning.study_session_{finished,abandoned}.v1 ─▶ insights.session-history (quorum)
+  ├─ learning.study_session_{finished,abandoned}.v1 ─▶ insights.session-history (quorum)
+  └─ learning.warmup_finished.v1                   ─▶ insights.session-history
 DLX learning.dlx (direct) ─▶ <fila>.dlq
 """
 
@@ -26,6 +27,7 @@ SESSION_HISTORY = QueueSpec(
     bindings=(
         "learning.study_session_finished.v1",
         "learning.study_session_abandoned.v1",
+        "learning.warmup_finished.v1",
     ),
 )
 

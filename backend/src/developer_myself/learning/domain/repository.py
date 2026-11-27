@@ -18,6 +18,10 @@ class StudyPlanRepository(Protocol):
         """Exclusão da conta (LGPD, ADR-0009)."""
         ...
 
+    async def content_counts(self, learner_ids: list[LearnerId]) -> dict[LearnerId, int]:
+        """Quantidade de conteúdos por aprendiz (consulta em lote para a área de admin)."""
+        ...
+
 
 class NotebookRepository(Protocol):
     """Cadernos das matérias: um documento por conteúdo, sempre filtrado pelo aprendiz."""

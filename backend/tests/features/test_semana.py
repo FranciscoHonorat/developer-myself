@@ -122,3 +122,11 @@ def then_challenge(week: list[WeekDay], title: str) -> None:
 def then_reviewed_days(week: list[WeekDay], title: str, n: int) -> None:
     days = [d for d in week if any(b.track.title == title for b in d.blocks)]
     assert len(days) >= n, [[b.track.title for b in d.blocks] for d in week]
+
+
+@then(parsers.parse('"{title}" tem {n:d} pomodoros em cada dia de estudo'))
+def then_daily_pomodoros(week: list[WeekDay], title: str, n: int) -> None:
+    per_day = [
+        sum(b.pomodoros for b in d.blocks if b.track.title == title) for d in study_days(week)
+    ]
+    assert per_day == [n] * len(per_day), per_day

@@ -4,6 +4,7 @@ Só a raiz (`StudyPlan`) muda o estado destas entidades. Os métodos com `_` no
 início são internos ao agregado (I4: pontos só mudam via `finish_session`).
 """
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -18,12 +19,16 @@ from developer_myself.learning.domain.value_objects import (
     ContentKind,
     ContentStatus,
     Evidence,
+    LearnerQuestion,
     MasteryLevel,
     Points,
+    Purpose,
     RecallRating,
     SessionKind,
     Title,
 )
+
+MAX_LEARNER_QUESTIONS = 5
 
 
 @dataclass(slots=True)
@@ -65,6 +70,8 @@ class Content:
     last_recall_rating: RecallRating | None = None
     consolidated_at: datetime | None = None  # None = consolidado antes deste registro existir
     last_to_review: str | None = None  # último "preciso revisar" não vazio
+    learner_questions: tuple[LearnerQuestion, ...] = ()  # fila FIFO, mais antiga primeiro
+    purpose: Purpose | None = None  # SDT: "por quê?" pessoal desta matéria
 
     # ------------------------------------------------------------------ consultas
     @property
@@ -122,6 +129,12 @@ class Content:
 
     def _award_point(self) -> None:
         self.points = self.points.add(1)
+
+    def _add_learner_question(self, question: LearnerQuestion) -> None:
+        self.learner_questions = (*self.learner_questions, question)[-MAX_LEARNER_QUESTIONS:]
+
+    def _consume_learner_questions(self, ids: set[uuid.UUID]) -> None:
+        self.learner_questions = tuple(q for q in self.learner_questions if q.id not in ids)
 
     def _register_session(
         self,

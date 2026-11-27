@@ -126,4 +126,13 @@ describe("AuthPage", () => {
       .mock.calls.some(([input]) => String(input).endsWith("/auth/login"));
     expect(sent).toBe(false);
   });
+
+  it("/entrar não consulta /auth/registration desnecessariamente", async () => {
+    renderAt("/entrar");
+    await screen.findByRole("button", { name: "Entrar" });
+    const askedRegistration = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.some(([input]) => String(input).endsWith("/auth/registration"));
+    expect(askedRegistration).toBe(false);
+  });
 });

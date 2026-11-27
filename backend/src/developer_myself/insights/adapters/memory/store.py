@@ -1,7 +1,11 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from developer_myself.insights.application.history import HistoryCursor, SessionRecord
+from developer_myself.insights.application.history import (
+    HistoryCursor,
+    LearnerHistorySummary,
+    SessionRecord,
+)
 
 
 @dataclass(slots=True)
@@ -36,6 +40,19 @@ class InMemorySessionHistoryStore:
 
     async def count_for(self, learner_id: str) -> int:
         return sum(1 for r in self._records.values() if r.learner_id == learner_id)
+
+    async def summaries_for(self, learner_ids: list[str]) -> dict[str, LearnerHistorySummary]:
+        wanted = set(learner_ids)
+        counts: dict[str, int] = {}
+        latest: dict[str, datetime] = {}
+        for r in self._records.values():
+            if r.learner_id not in wanted:
+                continue
+            counts[r.learner_id] = counts.get(r.learner_id, 0) + 1
+            prev = latest.get(r.learner_id)
+            if prev is None or r.finished_at > prev:
+                latest[r.learner_id] = r.finished_at
+        return {lid: LearnerHistorySummary(counts[lid], latest[lid]) for lid in counts}
 
     async def delete_for(self, learner_id: str) -> None:
         for key in [k for k, r in self._records.items() if r.learner_id == learner_id]:

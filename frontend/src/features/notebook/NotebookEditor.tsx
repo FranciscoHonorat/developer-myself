@@ -165,7 +165,11 @@ export function NotebookEditor({ contentId, title, tall = false }: Props) {
         disabled={!loaded}
         readOnly={status === "conflict"}
         placeholder="Escreva conceitos com as suas palavras…"
-        className={cn("resize-y leading-relaxed", tall ? "min-h-[60dvh]" : "min-h-56")}
+        // Cresce com o texto até um teto e, dali em diante, rola por dentro (a página não estica).
+        className={cn(
+          "resize-y overflow-y-auto leading-relaxed",
+          tall ? "min-h-[60dvh] max-h-[75dvh]" : "min-h-56 max-h-[50dvh]",
+        )}
         onChange={(e) => onChange(e.target.value)}
         onBlur={() => void flush()}
       />

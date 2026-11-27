@@ -35,6 +35,8 @@ STUDY_PLAN_SCHEMA: Doc = {
         "schema_version": {"bsonType": "int", "minimum": 1},
         "version": {"bsonType": ["int", "long"], "minimum": 1},
         "timezone": {"bsonType": "string", "maxLength": 64},
+        "purpose": {"bsonType": ["string", "null"], "maxLength": 300},
+        "max_in_progress": {"bsonType": ["int", "null"], "minimum": 1, "maximum": 3},
         "last_review_on": {"bsonType": ["string", "null"]},
         "has_outbox": {"bsonType": "bool"},
         "active_session": {
@@ -46,6 +48,16 @@ STUDY_PLAN_SCHEMA: Doc = {
                 "questions": {"bsonType": "array"},
             },
         },
+        "active_warmup": {
+            "bsonType": ["object", "null"],
+            "required": ["content_id", "started_at", "questions"],
+            "properties": {
+                "content_id": _UUID,
+                "started_at": _DATE,
+                "questions": {"bsonType": "array", "maxItems": 10},
+            },
+        },
+        "last_warmup_on": {"bsonType": ["string", "null"]},
         "contents": {
             "bsonType": "array",
             "items": {
@@ -61,6 +73,8 @@ STUDY_PLAN_SCHEMA: Doc = {
                     "last_session_at": _DATE_OR_NULL,
                     "finished_at": _DATE_OR_NULL,
                     "last_to_review": {"bsonType": ["string", "null"]},
+                    "purpose": {"bsonType": ["string", "null"], "maxLength": 300},
+                    "learner_questions": {"bsonType": "array", "maxItems": 5},
                     "challenges": {"bsonType": "array"},
                 },
             },

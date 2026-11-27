@@ -4,6 +4,7 @@ import pytest
 
 from developer_myself.curriculum.application.schedules import schedule_for
 from developer_myself.curriculum.domain.week import (
+    DAILY_POMODOROS,
     MAX_COMPETENCIES_PER_DAY,
     BlockKind,
     Track,
@@ -95,3 +96,71 @@ class TestPreferences:
         plan.change_preferences(StudyPreferences(240, frozenset({6})), now)
         plan.change_preferences(StudyPreferences(240, frozenset({6})), now)
         assert len(plan.pull_events()) == 1
+
+
+def test_daily_track_gets_2_pomodoros_every_day_right_after_reviews() -> None:
+    study = [track("A", "a"), track("B", "b"), track("C", "c")]
+    days = build_week(
+        study,
+        [track("R", "r")],
+        daily=[track("Inglês", "ingles")],
+        minutes_per_day=240,
+        rest_days=frozenset({6}),
+        start=MONDAY,
+    )
+    for day in days[:6]:
+        assert day.minutes == 240
+        assert day.blocks[0].track.title == "R"  # revisão (ou o desafio que ela cobre)
+        assert day.blocks[1].track.title == "Inglês"
+        assert day.blocks[1].pomodoros == DAILY_POMODOROS == 2
+    assert days[6].is_rest
+
+
+def test_daily_track_does_not_take_a_review_competency() -> None:
+    study = [track("A", "a"), track("B", "b"), track("C", "c")]
+    day = build_week(
+        study,
+        [track("R", "r")],
+        daily=[track("Inglês", "ingles")],
+        minutes_per_day=240,
+        rest_days=frozenset(),
+        start=MONDAY,
+    )[0]
+    assert day.competencies == ["r", "ingles", "a", "b", "c"]
+
+
+def test_short_day_keeps_reviews_before_the_daily_track() -> None:
+    day = build_week(
+        [track("A", "a")],
+        [track("R", "r")],
+        daily=[track("Inglês", "ingles")],
+        minutes_per_day=90,
+        rest_days=frozenset(),
+        start=MONDAY,
+    )[0]
+    assert [(b.track.title, b.pomodoros) for b in day.blocks] == [("R", 2), ("Inglês", 1)]
+
+
+def test_one_hour_day_with_reviews_leaves_no_room_for_the_daily_track() -> None:
+    day = build_week(
+        [track("A", "a")],
+        [track("R", "r")],
+        daily=[track("Inglês", "ingles")],
+        minutes_per_day=60,
+        rest_days=frozenset(),
+        start=MONDAY,
+    )[0]
+    assert [b.track.title for b in day.blocks] == ["R"]
+
+
+def test_without_study_the_daily_track_still_gets_its_pomodoros() -> None:
+    day = build_week(
+        [],
+        [track("R", "r"), track("S", "s")],
+        daily=[track("Inglês", "ingles")],
+        minutes_per_day=240,
+        rest_days=frozenset(),
+        start=MONDAY,
+    )[0]
+    assert day.minutes == 240
+    assert sum(b.pomodoros for b in day.blocks if b.track.title == "Inglês") == 2

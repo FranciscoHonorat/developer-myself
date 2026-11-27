@@ -44,6 +44,32 @@ const review: SessionRecord = {
 };
 
 describe("SessionHistory", () => {
+  it("mostra o aquecimento com o rótulo próprio, sem anotações", async () => {
+    const warmup: SessionRecord = {
+      ...review,
+      event_id: "w1",
+      type: "warmup_finished",
+      kind: "WARMUP",
+      duration_seconds: 120,
+      awarded: false,
+      notes_studied: "",
+      notes_understood: "",
+      notes_to_review: "",
+      level_after: null,
+      recall_rating: null,
+    };
+    routeFetch({
+      "/history?limit=20": { items: [warmup], next_cursor: null },
+      "/stats?days=30": stats,
+    });
+    renderWithClient(<SessionHistory />);
+    expect(await screen.findByText(/^Aquecimento · /)).toBeInTheDocument();
+    expect(screen.getByText("Explique sem consultar: CQS")).toBeInTheDocument();
+    // aquecimento nunca pontua por definição: nada de ícone de "sem ponto" (tom de cobrança)
+    expect(screen.queryByLabelText("sem ponto")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("aquecimento")).toBeInTheDocument();
+  });
+
   it("mostra o teste de memória da revisão", async () => {
     routeFetch({
       "/history?limit=20": { items: [review], next_cursor: null },

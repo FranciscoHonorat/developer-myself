@@ -47,6 +47,7 @@ export function makeContent(overrides: Partial<Content> = {}): Content {
     lock_reason: null,
     challenges: [],
     last_to_review: null,
+    daily: false,
     ...overrides,
   };
 }

@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import BaseModel, ConfigDict, StrictBool
 
 from developer_myself.identity.domain.model import User, UserCursor, UserId, UserNotFoundError
-from developer_myself.learning.domain.errors import StudyPlanNotFoundError
 from developer_myself.shared.adapters.cursor import decode_cursor, encode_cursor
 from developer_myself.shared.adapters.http import LearnerIdDep, http_error
 from developer_myself.shared.logging import log
@@ -54,23 +53,30 @@ class RegistrationOut(BaseModel):
     open: bool
 
 
-async def _overview(request: Request, user: User) -> AccountOut:
+async def _overviews(request: Request, users: list[User]) -> list[AccountOut]:
+    """Busca contagens e última sessão em lote (2 queries por página, sem N+1)."""
+    if not users:
+        return []
     container = request.app.state.container
-    learner = user.id.value
-    try:
-        contents = len((await container.learning.get_plan(learner)).contents)
-    except StudyPlanNotFoundError:  # cadastro interrompido antes de criar a trilha
-        contents = 0
-    latest = await container.history.store.page_for(str(learner), 1)
-    return AccountOut(
-        id=learner,
-        email=user.email.value,
-        username=user.username.value if user.username else None,
-        created_at=user.created_at,
-        last_activity_at=latest[0].finished_at if latest else None,
-        contents=contents,
-        sessions=await container.history.store.count_for(str(learner)),
-    )
+    ids = [u.id.value for u in users]
+    content_counts = await container.learning.content_counts(ids)
+    summaries = await container.history.store.summaries_for([str(i) for i in ids])
+    out: list[AccountOut] = []
+    for user in users:
+        learner = user.id.value
+        summary = summaries.get(str(learner))
+        out.append(
+            AccountOut(
+                id=learner,
+                email=user.email.value,
+                username=user.username.value if user.username else None,
+                created_at=user.created_at,
+                last_activity_at=summary.last_activity_at if summary else None,
+                contents=content_counts.get(learner, 0),
+                sessions=summary.sessions if summary else 0,
+            )
+        )
+    return out
 
 
 def _decode_user_cursor(token: str) -> UserCursor:
@@ -92,7 +98,7 @@ async def list_accounts(
     after = _decode_user_cursor(cursor) if cursor else None
     page = await identity.list_accounts(admin_id, limit, after)
     return AccountsPageOut(
-        items=[await _overview(request, u) for u in page.items],
+        items=await _overviews(request, page.items),
         next_cursor=(
             encode_cursor(page.next.created_at, str(page.next.user_id)) if page.next else None
         ),

@@ -19,7 +19,12 @@ async def export(request: Request, learner_id: LearnerIdDep) -> dict[str, Any]:
     me = await container.identity.me(UserId(learner_id))
     history = await container.history.recent(learner_id, 100_000)
     return {
-        "account": {"id": str(me.id.value), "email": me.email.value, "created_at": me.created_at},
+        "account": {
+            "id": str(me.id.value),
+            "username": me.username.value if me.username else None,
+            "email": me.email.value,
+            "created_at": me.created_at,
+        },
         "plan": PlanOut.of(plan, container.clock.now()).model_dump(mode="json"),
         "history": [SessionOut.of(r).model_dump(mode="json") for r in history],
         "notebooks": [

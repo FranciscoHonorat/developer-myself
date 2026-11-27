@@ -73,3 +73,19 @@ def test_export_is_limited() -> None:
 def test_limit_zero_disables_it() -> None:
     with make_client(rate_limit_reads_per_minute=0) as c:
         assert all(c.get("/api/plan").status_code == 401 for _ in range(20))
+
+
+def test_sensitive_auth_routes_have_strict_rate_limit() -> None:
+    with make_client(rate_limit_sensitive_per_minute=2, rate_limit_writes_per_minute=100) as c:
+        statuses = [
+            c.put(
+                "/api/auth/username", json={"username": "novo", "password": PASSWORD}, headers=H
+            ).status_code
+            for _ in range(3)
+        ]
+        assert statuses == [401, 401, 429]
+        # Delete-account divide o mesmo orçamento sensível
+        assert (
+            c.post("/api/auth/delete-account", json={"password": PASSWORD}, headers=H).status_code
+            == 429
+        )

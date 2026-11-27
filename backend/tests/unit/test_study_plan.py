@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from developer_myself.curriculum.domain.unlock import CatalogUnlockPolicy
 from developer_myself.learning.domain.content import Content
 from developer_myself.learning.domain.errors import (
     ChallengeNotFoundError,
@@ -18,14 +19,22 @@ from developer_myself.learning.domain.errors import (
 )
 from developer_myself.learning.domain.events import (
     ContentAdded,
+    ContentPurposeChanged,
     ContentQueued,
     ContentRemoved,
     ContentRenamed,
     ContentUnlocked,
+    PlanPurposeChanged,
+    StudyPreferencesChanged,
     StudySessionFinished,
 )
-from developer_myself.learning.domain.study_plan import StudyPlan
+from developer_myself.learning.domain.study_plan import (
+    MAX_CHALLENGES_PER_CONTENT,
+    MAX_CONTENTS,
+    StudyPlan,
+)
 from developer_myself.learning.domain.value_objects import (
+    PURPOSE_MAX_LENGTH,
     ChallengeId,
     ContentId,
     ContentKind,
@@ -35,8 +44,10 @@ from developer_myself.learning.domain.value_objects import (
     MasteryLevel,
     Notes,
     Points,
+    Purpose,
     RecallRating,
     SessionKind,
+    StudyPreferences,
     Timezone,
     Title,
 )
@@ -264,3 +275,95 @@ class TestOrganize:
         (event,) = plan.pull_events()
         assert isinstance(event, ContentRenamed)
         assert (event.old_title, event.new_title) == ("• TypeScript", "TypeScript")
+
+
+def test_limits_on_contents_and_challenges(plan: StudyPlan) -> None:
+    first = add(plan, "Conteúdo 0")
+    for i in range(1, MAX_CONTENTS):
+        add(plan, f"Conteúdo {i}")
+    with pytest.raises(InvalidValueError, match="máximo"):
+        add(plan, "Estouro")
+
+    for i in range(MAX_CHALLENGES_PER_CONTENT):
+        plan.add_challenge(
+            first.id, ChallengeId.new(), f"Desafio {i}", MasteryLevel.INTERMEDIATE, NOW
+        )
+    with pytest.raises(InvalidValueError, match="máximo"):
+        plan.add_challenge(first.id, ChallengeId.new(), "Estouro", MasteryLevel.INTERMEDIATE, NOW)
+
+
+class TestSelfDetermination:
+    def test_purpose_value_object_validation(self) -> None:
+        p = Purpose("  Dominar AppSec  ")
+        assert str(p) == "Dominar AppSec"
+        with pytest.raises(InvalidValueError):
+            Purpose("   ")
+        with pytest.raises(InvalidValueError):
+            Purpose("x" * (PURPOSE_MAX_LENGTH + 1))
+
+    def test_plan_and_content_purpose_events(self, plan: StudyPlan) -> None:
+        content = plan.add_content(
+            ContentId.new(),
+            Title("AppSec"),
+            ContentKind.BOOK,
+            NOW,
+            purpose=Purpose("Proteger APIs"),
+        )
+        assert content.purpose == Purpose("Proteger APIs")
+        plan.pull_events()
+
+        plan.change_purpose(Purpose("Liderar arquitetura segura"), NOW)
+        plan.change_purpose(Purpose("Liderar arquitetura segura"), NOW)  # no-op
+        plan.change_purpose(None, NOW)
+        events = plan.pull_events()
+        assert [type(e) for e in events] == [PlanPurposeChanged, PlanPurposeChanged]
+        assert isinstance(events[0], PlanPurposeChanged)
+        assert events[0].purpose == "Liderar arquitetura segura"
+        assert isinstance(events[1], PlanPurposeChanged)
+        assert events[1].purpose is None
+
+        plan.change_content_purpose(content.id, Purpose("Novo motivo"), NOW)
+        plan.change_content_purpose(content.id, Purpose("Novo motivo"), NOW)  # no-op
+        plan.change_content_purpose(content.id, None, NOW)
+        c_events = plan.pull_events()
+        assert [type(e) for e in c_events] == [ContentPurposeChanged, ContentPurposeChanged]
+
+    def test_autonomy_parallel_slots_override_and_unlock(self) -> None:
+        plan = StudyPlan.create(LearnerId.new(), Timezone("America/Sao_Paulo"))
+        plan.unlock_policy = CatalogUnlockPolicy(max_in_progress=3)
+        plan.change_preferences(StudyPreferences(210, frozenset()), NOW, max_in_progress=1)
+        assert plan.effective_max_in_progress == 1
+        add(plan, "Linux")
+        b = add(plan, "Learning Go")
+        assert b.status is ContentStatus.LOCKED
+        plan.pull_events()
+
+        # Mesmo ritmo e mesmas vagas -> no-op
+        assert (
+            plan.change_preferences(StudyPreferences(210, frozenset()), NOW, max_in_progress=1)
+            == []
+        )
+        assert plan.pull_events() == []
+
+        # Aumentar para 2 vagas libera B da fila
+        unlocked = plan.change_preferences(
+            StudyPreferences(210, frozenset()), NOW, max_in_progress=2
+        )
+        assert unlocked == [b.id]
+        assert plan.content(b.id).status is ContentStatus.IN_PROGRESS
+        assert any(isinstance(e, StudyPreferencesChanged) for e in plan.pull_events())
+
+        with pytest.raises(InvalidValueError):
+            plan.change_preferences(StudyPreferences(210, frozenset()), NOW, max_in_progress=0)
+        with pytest.raises(InvalidValueError):
+            plan.change_preferences(StudyPreferences(210, frozenset()), NOW, max_in_progress=4)
+
+    def test_outcome_progress_at_max_level_has_no_next_level(self, plan: StudyPlan) -> None:
+        content = add(plan, "A")
+        master(plan, content)
+        plan.start_session(content.id, NOW)
+        outcome = plan.finish_session(NOTES, NOW + timedelta(minutes=30), RecallRating.GOOD)
+        assert outcome.level is MasteryLevel.ADVANCED
+        assert outcome.next_level is None
+        assert outcome.points_for_next_level is None
+        assert outcome.challenges_for_next_level is None

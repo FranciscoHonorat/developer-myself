@@ -35,8 +35,13 @@ schema_of() {
 }
 mongo_db() {
   local db
-  db=$(sed -n 's/^DM_MONGO_DB=//p' .env 2>/dev/null | tail -1)
-  echo "${db:-developer_myself}"
+  db=$(sed -n 's/^DM_MONGO_DB=//p' .env 2>/dev/null | tail -1 | tr -d "\"'[:space:]")
+  db="${db:-developer_myself}"
+  if [[ ! "$db" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    log "DM_MONGO_DB inválido no .env: $db"
+    exit 1
+  fi
+  echo "$db"
 }
 # Quantas trilhas já foram regravadas numa versão acima de $1.
 plans_above() {
@@ -45,12 +50,19 @@ plans_above() {
 }
 
 # Um deploy por vez (timer + `make deploy` manual ao mesmo tempo).
-exec 9>"${XDG_RUNTIME_DIR:-/tmp}/developer-myself-deploy.lock"
+# Lock dentro de .deploy (evita caminho previsível em /tmp compartilhado).
+exec 9>"$STATE_DIR/deploy.lock"
 flock -n 9 || { log "outro deploy em andamento; saindo"; exit 0; }
 
 if [[ ! -f .env ]]; then
   cp .env.example .env
-  log "criei .env a partir de .env.example — troque a senha do RabbitMQ"
+  chmod 600 .env
+  log "criei .env a partir de .env.example — defina RABBITMQ_PASSWORD forte antes de subir"
+  exit 1
+fi
+if grep -qE '^RABBITMQ_PASSWORD=troque-esta-senha[[:space:]]*$' .env; then
+  log "RABBITMQ_PASSWORD ainda está com o valor padrão em .env — troque antes do deploy"
+  exit 1
 fi
 
 docker pull --quiet "$IMAGE:$TAG" >/dev/null
@@ -87,8 +99,11 @@ if [[ -n "$running_id" ]]; then
   new_schema=$(schema_of "$new_id")
   if ((new_schema > old_schema)); then
     backup="$STATE_DIR/backup-$(date +%Y%m%dT%H%M%S)-schema$old_schema.archive.gz"
-    docker compose exec -T mongo mongodump --quiet --archive --gzip --db "$(mongo_db)" >"$backup"
-    log "schema $old_schema → $new_schema: backup do Mongo em $backup"
+    (
+      umask 077
+      docker compose exec -T mongo mongodump --quiet --archive --gzip --db "$(mongo_db)" >"$backup"
+    )
+    log "schema $old_schema → $new_schema: backup do Mongo em $backup (permissão 600)"
   fi
 fi
 

@@ -14,7 +14,7 @@ from pymongo.errors import DuplicateKeyError
 
 from developer_myself.learning.domain.content import Challenge, Content
 from developer_myself.learning.domain.errors import ConcurrencyError
-from developer_myself.learning.domain.study_plan import ActiveSession, StudyPlan
+from developer_myself.learning.domain.study_plan import ActiveSession, ActiveWarmup, StudyPlan
 from developer_myself.learning.domain.value_objects import (
     ChallengeId,
     ContentId,
@@ -22,8 +22,10 @@ from developer_myself.learning.domain.value_objects import (
     ContentStatus,
     Evidence,
     LearnerId,
+    LearnerQuestion,
     MasteryLevel,
     Points,
+    Purpose,
     QuestionSource,
     RecallQuestion,
     RecallRating,
@@ -34,7 +36,7 @@ from developer_myself.learning.domain.value_objects import (
 from developer_myself.shared.correlation import get_correlation_id
 from developer_myself.shared.events import envelope
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 Doc = dict[str, Any]
 
 
@@ -49,11 +51,35 @@ def _opt_utc(value: datetime | None) -> datetime | None:
 # --------------------------------------------------------------------------- mapper
 
 
+def _question_doc(q: RecallQuestion) -> Doc:
+    return {
+        "id": q.id,
+        "text": q.text,
+        "source": q.source.value,
+        "template": q.template,
+        "topic": q.topic,
+        "expected_answer": q.expected_answer,
+    }
+
+
+def _question(q: Doc) -> RecallQuestion:
+    return RecallQuestion(
+        id=q["id"],
+        text=q["text"],
+        source=QuestionSource(q["source"]),
+        template=q["template"],
+        topic=q.get("topic"),
+        expected_answer=q.get("expected_answer"),
+    )
+
+
 def to_document(plan: StudyPlan) -> Doc:
     """Estado do agregado (sem `version` e sem `outbox`, que têm tratamento próprio)."""
     return {
         "schema_version": SCHEMA_VERSION,
         "timezone": plan.timezone.name,
+        "purpose": plan.purpose.value if plan.purpose else None,
+        "max_in_progress": plan.max_in_progress,
         "preferences": {
             "minutes_per_day": plan.preferences.minutes_per_day,
             "rest_days": sorted(plan.preferences.rest_days),
@@ -63,20 +89,21 @@ def to_document(plan: StudyPlan) -> Doc:
             {
                 "content_id": plan.active_session.content_id.value,
                 "started_at": plan.active_session.started_at,
-                "questions": [
-                    {
-                        "id": q.id,
-                        "text": q.text,
-                        "source": q.source.value,
-                        "template": q.template,
-                        "topic": q.topic,
-                    }
-                    for q in plan.active_session.questions
-                ],
+                "questions": [_question_doc(q) for q in plan.active_session.questions],
             }
             if plan.active_session
             else None
         ),
+        "active_warmup": (
+            {
+                "content_id": plan.active_warmup.content_id.value,
+                "started_at": plan.active_warmup.started_at,
+                "questions": [_question_doc(q) for q in plan.active_warmup.questions],
+            }
+            if plan.active_warmup
+            else None
+        ),
+        "last_warmup_on": plan.last_warmup_on.isoformat() if plan.last_warmup_on else None,
         "contents": [
             {
                 "id": c.id.value,
@@ -94,6 +121,11 @@ def to_document(plan: StudyPlan) -> Doc:
                 "last_recall_rating": int(c.last_recall_rating) if c.last_recall_rating else None,
                 "consolidated_at": c.consolidated_at,
                 "last_to_review": c.last_to_review,
+                "purpose": c.purpose.value if c.purpose else None,
+                "learner_questions": [
+                    {"id": q.id, "text": q.text, "answer": q.answer, "created_at": q.created_at}
+                    for q in c.learner_questions
+                ],
                 "challenges": [
                     {
                         "id": ch.id.value,
@@ -140,7 +172,30 @@ def _v3_to_v4(doc: Doc) -> Doc:
     return doc
 
 
-UPCASTERS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4}
+def _v4_to_v5(doc: Doc) -> Doc:
+    """v5: aquecimento (ativo e último dia) e perguntas do aprendiz para o "eu do futuro"."""
+    doc.setdefault("active_warmup", None)
+    doc.setdefault("last_warmup_on", None)
+    for content in doc["contents"]:
+        content.setdefault("learner_questions", [])
+    if doc.get("active_session"):
+        for question in doc["active_session"]["questions"]:
+            question.setdefault("expected_answer", None)
+    doc["schema_version"] = 5
+    return doc
+
+
+def _v5_to_v6(doc: Doc) -> Doc:
+    """v6: SDT — propósito (plano e conteúdos) e limite próprio de conteúdos em paralelo."""
+    doc.setdefault("purpose", None)
+    doc.setdefault("max_in_progress", None)
+    for content in doc["contents"]:
+        content.setdefault("purpose", None)
+    doc["schema_version"] = 6
+    return doc
+
+
+UPCASTERS = {1: _v1_to_v2, 2: _v2_to_v3, 3: _v3_to_v4, 4: _v4_to_v5, 5: _v5_to_v6}
 
 
 def upcast(doc: Doc) -> Doc:
@@ -160,6 +215,7 @@ def upcast(doc: Doc) -> Doc:
 def from_document(doc: Doc) -> StudyPlan:
     doc = upcast(doc)
     active = doc.get("active_session")
+    warmup = doc.get("active_warmup")
     plan = StudyPlan(
         id=LearnerId(doc["_id"]),
         timezone=Timezone(doc["timezone"]),
@@ -182,6 +238,16 @@ def from_document(doc: Doc) -> StudyPlan:
                 ),
                 consolidated_at=_opt_utc(c.get("consolidated_at")),
                 last_to_review=c["last_to_review"],
+                purpose=Purpose(c["purpose"]) if c.get("purpose") else None,
+                learner_questions=tuple(
+                    LearnerQuestion(
+                        id=q["id"],
+                        text=q["text"],
+                        created_at=_utc(q["created_at"]),
+                        answer=q.get("answer"),
+                    )
+                    for q in c["learner_questions"]
+                ),
                 challenges=[
                     Challenge(
                         id=ChallengeId(ch["id"]),
@@ -200,19 +266,22 @@ def from_document(doc: Doc) -> StudyPlan:
             ActiveSession(
                 ContentId(active["content_id"]),
                 _utc(active["started_at"]),
-                tuple(
-                    RecallQuestion(
-                        id=q["id"],
-                        text=q["text"],
-                        source=QuestionSource(q["source"]),
-                        template=q["template"],
-                        topic=q.get("topic"),
-                    )
-                    for q in active["questions"]
-                ),
+                tuple(_question(q) for q in active["questions"]),
             )
             if active
             else None
+        ),
+        active_warmup=(
+            ActiveWarmup(
+                ContentId(warmup["content_id"]),
+                _utc(warmup["started_at"]),
+                tuple(_question(q) for q in warmup["questions"]),
+            )
+            if warmup
+            else None
+        ),
+        last_warmup_on=(
+            date.fromisoformat(doc["last_warmup_on"]) if doc.get("last_warmup_on") else None
         ),
         last_review_on=(
             date.fromisoformat(doc["last_review_on"]) if doc.get("last_review_on") else None
@@ -221,6 +290,8 @@ def from_document(doc: Doc) -> StudyPlan:
         preferences=StudyPreferences(
             doc["preferences"]["minutes_per_day"], frozenset(doc["preferences"]["rest_days"])
         ),
+        purpose=Purpose(doc["purpose"]) if doc.get("purpose") else None,
+        max_in_progress=doc.get("max_in_progress"),
     )
     return plan
 
@@ -277,3 +348,13 @@ class MongoStudyPlanRepository:
 
     async def delete(self, learner_id: LearnerId) -> None:
         await self._col.delete_one({"_id": learner_id.value})
+
+    async def content_counts(self, learner_ids: list[LearnerId]) -> dict[LearnerId, int]:
+        if not learner_ids:
+            return {}
+        pipeline: list[Doc] = [
+            {"$match": {"_id": {"$in": [lid.value for lid in learner_ids]}}},
+            {"$project": {"count": {"$size": "$contents"}}},
+        ]
+        cursor = await self._col.aggregate(pipeline)
+        return {LearnerId(doc["_id"]): int(doc["count"]) async for doc in cursor}

@@ -47,6 +47,7 @@ from developer_myself.learning.domain.study_plan import SessionOutcome, StudyPla
 from developer_myself.learning.domain.value_objects import (
     ContentStatus,
     LearnerId,
+    LearnerQuestion,
     MasteryLevel,
     RecallRating,
     SessionKind,
@@ -598,3 +599,18 @@ def then_queue(world: World, titles: str) -> None:
 @then("a reordenação é recusada")
 def then_reorder_refused(world: World) -> None:
     assert isinstance(world.error, InvalidTransitionError), world.error
+
+
+# ---------------------------------------------------------------- perguntas do eu do futuro
+@given(parsers.parse('que deixei para "{title}" a pergunta "{text}"'))
+def given_learner_question(world: World, title: str, text: str) -> None:
+    plan = world.plan()
+    content = plan.find_by_title(title)
+    assert content is not None
+    content._add_learner_question(LearnerQuestion(uuid.uuid7(), text, world.clock.now()))
+    world.run(world.repository.save(plan))
+
+
+@then(parsers.parse('"{title}" não tem perguntas do eu do futuro'))
+def then_no_learner_questions(world: World, title: str) -> None:
+    assert world.content(title).learner_questions == ()

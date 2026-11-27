@@ -66,6 +66,9 @@ export interface Content {
   lock_reason: string | null;
   challenges: Challenge[];
   last_to_review: string | null;
+  purpose?: string | null;
+  /** Hábito diário (ex.: Inglês): em andamento fora das vagas. */
+  daily: boolean;
 }
 
 export type QuestionSource = "TO_REVIEW" | "SPACED_TOPIC" | "TOPIC" | "LEARNER";
@@ -75,6 +78,8 @@ export interface RecallQuestion {
   id: string;
   text: string;
   source: QuestionSource;
+  /** Só nas perguntas que o aprendiz deixou para o "eu do futuro". */
+  expected_answer?: string | null;
 }
 
 export interface RecallAnswer {
@@ -95,6 +100,7 @@ export interface RecallItem {
 export interface ActiveSession {
   content_id: string;
   content_title: string;
+  content_purpose?: string | null;
   kind: SessionKind | null;
   started_at: string;
   expires_at: string;
@@ -104,6 +110,7 @@ export interface ActiveSession {
 
 export interface Plan {
   timezone: string;
+  purpose?: string | null;
   preferences: Preferences;
   max_in_progress: number;
   server_time: string;
@@ -123,6 +130,13 @@ export interface Outcome {
   total_points: number;
   level: MasteryLevel;
   unlocked_content_id: string | null;
+  level_before?: MasteryLevel;
+  next_level?: MasteryLevel | null;
+  points_for_next_level?: number | null;
+  challenges_solved?: number;
+  challenges_for_next_level?: number | null;
+  recall_recalled?: number;
+  recall_total?: number;
 }
 
 /** Uma página do histórico. `next_cursor` é opaco: só devolvê-lo para pedir a próxima. */
@@ -131,12 +145,15 @@ export interface HistoryPage {
   next_cursor: string | null;
 }
 
+/** Registro do histórico: sessões e aquecimentos (que não são sessão nem dão ponto). */
+export type HistoryKind = SessionKind | "WARMUP";
+
 export interface SessionRecord {
   event_id: string;
-  type: "study_session_finished" | "study_session_abandoned";
+  type: "study_session_finished" | "study_session_abandoned" | "warmup_finished";
   content_id: string;
   content_title: string;
-  kind: SessionKind;
+  kind: HistoryKind;
   started_at: string;
   finished_at: string;
   duration_seconds: number;
@@ -157,6 +174,10 @@ export interface Stats {
   current_streak_days: number;
   withheld_by_reason: Record<string, number>;
   daily: { day: string; sessions: number; minutes: number; points: number }[];
+  recall_questions_total?: number;
+  recall_questions_recalled?: number;
+  recall_questions_partial?: number;
+  recall_accuracy?: number | null;
 }
 
 export interface Recommendations {
@@ -171,6 +192,30 @@ export interface NotesInput {
   to_review: string;
   recall_rating?: number;
   answers?: RecallAnswer[];
+  future_question?: FutureQuestion | null;
+}
+
+export interface FutureQuestion {
+  text: string;
+  answer?: string | null;
+}
+
+export interface ActiveWarmup {
+  started_at: string;
+  questions: RecallQuestion[];
+}
+
+export interface WarmupStatus {
+  available: boolean;
+  done_today: boolean;
+  content: { id: string; title: string } | null;
+  active: ActiveWarmup | null;
+}
+
+export interface WarmupNext {
+  content_id: string;
+  title: string;
+  kind: SessionKind;
 }
 
 export interface DayPlan {

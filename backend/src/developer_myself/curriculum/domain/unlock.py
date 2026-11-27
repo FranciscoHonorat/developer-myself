@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from developer_myself.curriculum.domain.competencies import skills_for
 
 STRONG, MEDIUM = 1.0, 0.5
+# Hábito diário (2 pomodoros por dia na semana), fora das vagas: o Inglês.
+DAILY_COMPETENCIES = frozenset({"ingles"})
 
 # Pares de competências que se reforçam quando estudadas juntas.
 AFFINITY_PAIRS: dict[frozenset[str], float] = {
@@ -54,6 +56,7 @@ def affinity(a: str, b: str) -> float:
 @dataclass(frozen=True, slots=True)
 class CatalogUnlockPolicy:
     max_in_progress: int = 3
+    daily_competencies: frozenset[str] = DAILY_COMPETENCIES
 
     def competency_of(self, title: str) -> str:
         return primary_competency(title)

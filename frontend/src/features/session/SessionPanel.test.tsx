@@ -1,10 +1,13 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Outcome } from "@/api/types";
+import { playBlip } from "@/lib/blip";
 import { callTo, jsonResponse, renderWithClient, routeFetch } from "@/test/render";
 import { SessionPanel } from "./SessionPanel";
+
+vi.mock("@/lib/blip", () => ({ playBlip: vi.fn() }));
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -48,6 +51,36 @@ function HidingHost(props: {
 }
 
 describe("SessionPanel", () => {
+  describe("aviso sonoro dos 25 minutos", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.mocked(playBlip).mockClear();
+    });
+
+    it("toca um blip uma vez quando o tempo mínimo é atingido", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+      renderWithClient(
+        <SessionPanel session={session} serverTime="2026-11-01T10:24:58Z" onFinished={vi.fn()} />,
+      );
+      expect(playBlip).not.toHaveBeenCalled();
+
+      act(() => vi.advanceTimersByTime(3000));
+      expect(playBlip).toHaveBeenCalledTimes(1);
+
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(playBlip).toHaveBeenCalledTimes(1);
+    });
+
+    it("não toca ao reabrir uma sessão que já passou dos 25 minutos", () => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+      renderWithClient(
+        <SessionPanel session={session} serverTime="2026-11-01T10:30:00Z" onFinished={vi.fn()} />,
+      );
+      act(() => vi.advanceTimersByTime(3000));
+      expect(playBlip).not.toHaveBeenCalled();
+    });
+  });
+
   it('mostra o último "preciso revisar"', () => {
     renderWithClient(
       <SessionPanel
@@ -174,6 +207,50 @@ describe("SessionPanel", () => {
       useful: null,
     });
     expect(localStorage.getItem(`recall:${review.started_at}`)).toBeNull();
+  });
+
+  it("no estudo, a pergunta para o eu do futuro é opcional e vai junto ao finalizar", async () => {
+    const fetchMock = routeFetch({
+      "/sessions/current/finish": {
+        content_id: "c1",
+        kind: "STUDY",
+        duration_seconds: 1500,
+        awarded: true,
+        reason: null,
+        total_points: 4,
+        level: "BEGINNER",
+        unlocked_content_id: null,
+      },
+    });
+    const onFinished = vi.fn();
+    renderWithClient(
+      <SessionPanel session={session} serverTime="2026-11-01T10:30:00Z" onFinished={onFinished} />,
+    );
+    const user = userEvent.setup();
+    const toggle = screen.getByText("💭 Deixar uma pergunta para o seu eu do futuro (opcional)");
+    expect(screen.getByLabelText("Pergunta")).not.toBeVisible();
+    await user.click(toggle);
+    await user.type(screen.getByLabelText("Pergunta"), "O que é CQS?");
+    await user.type(screen.getByLabelText("Resposta esperada"), "Separar comando de consulta");
+    await user.type(screen.getByLabelText("O que estudei"), "a".repeat(20));
+    await user.type(screen.getByLabelText("O que entendi"), "b".repeat(20));
+    await user.type(screen.getByLabelText("O que preciso revisar"), "c".repeat(20));
+    await user.click(screen.getByRole("button", { name: "Finalizar sessão" }));
+
+    await waitFor(() => expect(onFinished).toHaveBeenCalled());
+    const body = JSON.parse(String(callTo(fetchMock, "/sessions/current/finish")?.[1]?.body));
+    expect(body.future_question).toEqual({
+      text: "O que é CQS?",
+      answer: "Separar comando de consulta",
+    });
+  });
+
+  it("a revisão não pede pergunta para o eu do futuro", () => {
+    routeFetch();
+    renderWithClient(
+      <SessionPanel session={review} serverTime="2026-11-01T10:30:00Z" onFinished={vi.fn()} />,
+    );
+    expect(screen.queryByText(/eu do futuro/)).not.toBeInTheDocument();
   });
 
   it("sessão de estudo não mostra teste", () => {

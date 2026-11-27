@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     default_timezone: str = "America/Sao_Paulo"
     static_dir: str | None = None
+    enable_docs: bool = False
+    max_request_body_bytes: int = 524_288  # 512 KiB (caderno aceita 100k chars UTF-8)
     log_level: str = "INFO"
     log_json: bool = True
 
@@ -33,6 +35,7 @@ class Settings(BaseSettings):
     rate_limit_writes_per_minute: int = 120
     rate_limit_registers_per_hour: int = 5
     rate_limit_exports_per_minute: int = 5
+    rate_limit_sensitive_per_minute: int = 10
 
     # Trilha: quantos conteúdos podem estar em andamento ao mesmo tempo (ADR-0002, I1)
     max_parallel_contents: int = 3

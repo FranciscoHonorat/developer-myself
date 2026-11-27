@@ -126,4 +126,50 @@ describe("TrailPage", () => {
       expect(screen.queryByRole("navigation", { name: /Páginas de/ })).not.toBeInTheDocument();
     });
   });
+
+  it("Inglês (hábito diário) não conta nas vagas e aparece como de todo dia", async () => {
+    routeFetch({
+      "/plan": makePlan({
+        contents: [
+          makeContent({ id: "c1", title: "Clean Code" }),
+          makeContent({ id: "c5", title: "Conversação em Inglês", daily: true }),
+        ],
+      }),
+    });
+    renderWithClient(
+      <MemoryRouter>
+        <TrailPage />
+      </MemoryRouter>,
+    );
+    const current = await screen.findByRole("region", { name: /Em andamento/ });
+    expect(within(current).getByText("1/3 vagas · 1 de todo dia")).toBeInTheDocument();
+    const english = within(current).getByRole("article", { name: "Conversação em Inglês" });
+    expect(within(english).getByText("Todo dia")).toBeInTheDocument();
+  });
+
+  it("SDT: reordenar a fila envia PUT /api/queue com a nova ordem", async () => {
+    const fetchMock = routeFetch({
+      "/plan": makePlan({
+        contents: [
+          makeContent({ id: "c1", title: "Clean Code" }),
+          makeContent({ id: "q1", title: "Docker", status: "LOCKED", queue_position: 1 }),
+          makeContent({ id: "q2", title: "Kubernetes", status: "LOCKED", queue_position: 2 }),
+        ],
+      }),
+      "/queue": null,
+    });
+    renderWithClient(
+      <MemoryRouter>
+        <TrailPage />
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Subir Kubernetes na fila" }));
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([input, init]) => String(input).endsWith("/queue") && init?.method === "PUT",
+      );
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({ content_ids: ["q2", "q1"] });
+    });
+  });
 });

@@ -1,5 +1,5 @@
-import { CircleCheck, NotebookPen, RotateCcw } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { CircleCheck, Compass, NotebookPen, RotateCcw } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCancelSession, useFinishSession } from "@/api/hooks";
 import { charsWithoutSpaces, formatDuration, RECALL_LABEL, SESSION_LABEL } from "@/api/labels";
 import type { ActiveSession, Outcome, RecallAnswer } from "@/api/types";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { NotebookEditor } from "@/features/notebook/NotebookEditor";
+import { playBlip } from "@/lib/blip";
 import { MOBILE_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { RecallSteps } from "./RecallSteps";
@@ -53,6 +54,8 @@ function SessionPanelBody({ session, serverTime, onFinished }: Props) {
   const [understood, setUnderstood] = useState("");
   const [toReview, setToReview] = useState("");
   const [recall, setRecall] = useState<number | null>(null);
+  const [futureText, setFutureText] = useState("");
+  const [futureAnswer, setFutureAnswer] = useState("");
   const isReview = session.kind === "REVIEW";
   const hasTest = isReview && session.questions.length > 0;
   const recallKey = `recall:${session.started_at}`;
@@ -74,6 +77,14 @@ function SessionPanelBody({ session, serverTime, onFinished }: Props) {
   const chars = charsWithoutSpaces(studied, understood, toReview);
   const allFilled = [studied, understood, toReview].every((f) => f.trim() !== "");
   const progress = Math.min(1, elapsed / MIN_SECONDS);
+  const reached = elapsed >= MIN_SECONDS;
+
+  // Avisa com um blip só na virada dos 25 min, não ao reabrir uma sessão que já passou.
+  const wasReached = useRef(reached);
+  useEffect(() => {
+    if (reached && !wasReached.current) playBlip();
+    wasReached.current = reached;
+  }, [reached]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -86,6 +97,14 @@ function SessionPanelBody({ session, serverTime, onFinished }: Props) {
         to_review: toReview,
         ...(isReview && recall !== null ? { recall_rating: recall } : {}),
         ...(hasTest && answers ? { answers } : {}),
+        ...(!isReview && futureText.trim()
+          ? {
+              future_question: {
+                text: futureText.trim(),
+                answer: futureAnswer.trim() || null,
+              },
+            }
+          : {}),
       })
       .then((outcome) => {
         clearRecallDraft(recallKey);
@@ -93,6 +112,8 @@ function SessionPanelBody({ session, serverTime, onFinished }: Props) {
         setUnderstood("");
         setToReview("");
         setRecall(null);
+        setFutureText("");
+        setFutureAnswer("");
         onFinished(outcome);
       })
       .catch(() => {
@@ -128,6 +149,12 @@ function SessionPanelBody({ session, serverTime, onFinished }: Props) {
             <h2 id="h-session" className="mt-1 text-xl font-semibold tracking-tight">
               {session.kind ? SESSION_LABEL[session.kind] : "Sessão"}: {session.content_title}
             </h2>
+            {session.content_purpose && (
+              <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
+                <Compass aria-hidden className="mt-0.5 size-4 shrink-0 text-primary" />
+                <span>{session.content_purpose}</span>
+              </p>
+            )}
             <p className="mt-1 font-mono text-xs text-muted-foreground">
               início {time(session.started_at)} · expira {time(session.expires_at)}
             </p>
@@ -144,7 +171,7 @@ function SessionPanelBody({ session, serverTime, onFinished }: Props) {
         <div className="flex flex-col gap-2">
           <Progress value={Math.round(progress * 100)} aria-label="Tempo até valer ponto" />
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {elapsed < MIN_SECONDS ? (
+            {!reached ? (
               `Faltam ${formatDuration(MIN_SECONDS - elapsed)} para a sessão valer ponto.`
             ) : (
               <>
@@ -245,6 +272,38 @@ function SessionPanelBody({ session, serverTime, onFinished }: Props) {
               />
             </div>
           ))}
+          {!isReview && (
+            <details className="group rounded-lg border px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium">
+                💭 Deixar uma pergunta para o seu eu do futuro (opcional)
+              </summary>
+              <div className="mt-3 flex flex-col gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Ela volta no próximo aquecimento ou revisão, para você responder sem consultar.
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="future-question">Pergunta</Label>
+                  <Textarea
+                    id="future-question"
+                    rows={2}
+                    maxLength={500}
+                    value={futureText}
+                    onChange={(e) => setFutureText(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="future-answer">Resposta esperada</Label>
+                  <Textarea
+                    id="future-answer"
+                    rows={2}
+                    maxLength={2000}
+                    value={futureAnswer}
+                    onChange={(e) => setFutureAnswer(e.target.value)}
+                  />
+                </div>
+              </div>
+            </details>
+          )}
           <p
             aria-live="polite"
             className={cn(
